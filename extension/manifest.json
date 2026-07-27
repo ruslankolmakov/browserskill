@@ -1,0 +1,55 @@
+{
+  "manifest_version": 2,
+  "name": "ffmcp bridge",
+  "version": "1.0.0",
+  "description": "Полный доступ к Firefox для MCP-агентов через native messaging (без HTTP).",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "ffmcp@local",
+      "strict_min_version": "115.0"
+    }
+  },
+  "background": {
+    "scripts": ["background.js"],
+    "persistent": true
+  },
+  "browser_action": {
+    "default_title": "ffmcp",
+    "default_popup": "popup.html"
+  },
+  "permissions": [
+    "nativeMessaging",
+    "<all_urls>",
+    "tabs",
+    "activeTab",
+    "webNavigation",
+    "webRequest",
+    "webRequestBlocking",
+    "cookies",
+    "history",
+    "bookmarks",
+    "downloads",
+    "downloads.open",
+    "storage",
+    "unlimitedStorage",
+    "sessions",
+    "contextualIdentities",
+    "browsingData",
+    "management",
+    "clipboardRead",
+    "clipboardWrite",
+    "notifications",
+    "privacy",
+    "proxy",
+    "browserSettings",
+    "topSites",
+    "find",
+    "pageCapture",
+    "idle",
+    "dns",
+    "alarms",
+    "search",
+    "theme",
+    "menus"
+  ]
+}
