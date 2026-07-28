@@ -17,6 +17,23 @@ const RING = 2000;
 const consoleLog = [];
 const networkLog = [];
 
+// Запросы MCP-клиентов на доступ, ждущие решения пользователя в popup.
+const pendingApprovals = new Map(); // reqId -> { reqId, client, token, ts }
+
+function refreshBadge() {
+  const ba = browser.browserAction;
+  if (pendingApprovals.size) {
+    ba.setBadgeText({ text: "!" });
+    ba.setBadgeBackgroundColor({ color: "#E8A400" });
+  } else if (port !== null) {
+    ba.setBadgeText({ text: "on" });
+    ba.setBadgeBackgroundColor({ color: "#12A150" });
+  } else {
+    ba.setBadgeText({ text: "off" });
+    ba.setBadgeBackgroundColor({ color: "#C62828" });
+  }
+}
+
 // Состояние для popup (top-level const не виден через getBackgroundPage).
 window.__ffmcp = {
   consoleLog,
@@ -24,7 +41,46 @@ window.__ffmcp = {
   connected: () => port !== null,
   targetWindow: () => targetWindow(),
   reconnect: () => { if (port) port.disconnect(); port = null; connect(); },
+  pendingApprovals: () => [...pendingApprovals.values()],
+  decideApproval: (reqId, decision, scope) => {
+    if (port) port.postMessage({ type: "approval-decision", reqId, decision, scope });
+    pendingApprovals.delete(reqId);
+    browser.notifications.clear("ffmcp-approval-" + reqId).catch(() => {});
+    refreshBadge();
+  },
 };
+
+function onApprovalRequest(msg) {
+  pendingApprovals.set(msg.reqId, {
+    reqId: msg.reqId,
+    client: msg.client || {},
+    token: msg.token || null,
+    ts: Date.now(),
+  });
+  const c = msg.client || {};
+  const who = c.name ? `${c.name}${c.pid ? " (pid " + c.pid + ")" : ""}` : "локальный процесс";
+  browser.notifications
+    .create("ffmcp-approval-" + msg.reqId, {
+      type: "basic",
+      title: "ffmcp: запрос доступа к Firefox",
+      message: `${who} хочет управлять браузером. Откройте значок ffmcp, чтобы разрешить или отклонить.`,
+    })
+    .catch(() => {});
+  refreshBadge();
+}
+
+function onApprovalExpired(msg) {
+  pendingApprovals.delete(msg.reqId);
+  browser.notifications.clear("ffmcp-approval-" + msg.reqId).catch(() => {});
+  refreshBadge();
+}
+
+// Клик по нотификации открывает popup — кнопок в самих нотификациях Firefox нет.
+browser.notifications.onClicked.addListener((id) => {
+  if (id.startsWith("ffmcp-approval-") && browser.browserAction.openPopup) {
+    browser.browserAction.openPopup().catch(() => {});
+  }
+});
 
 function push(buf, entry) {
   buf.push(entry);
@@ -696,26 +752,30 @@ function connect() {
   }
 
   port.onMessage.addListener((msg) => {
-    if (msg && msg.type === "call") handleCall(msg);
+    if (!msg) return;
+    if (msg.type === "call") handleCall(msg);
+    else if (msg.type === "approval-request") onApprovalRequest(msg);
+    else if (msg.type === "approval-expired") onApprovalExpired(msg);
   });
 
   port.onDisconnect.addListener(() => {
     const e = browser.runtime.lastError || (port && port.error);
     console.warn("[ffmcp] хост отключился:", e && e.message);
     port = null;
+    // Хост ушёл — решать по висящим запросам больше некому.
+    for (const id of pendingApprovals.keys()) browser.notifications.clear("ffmcp-approval-" + id).catch(() => {});
+    pendingApprovals.clear();
     scheduleReconnect();
   });
 
   connectedAt = Date.now();
   port.postMessage({ type: "hello", extension: browser.runtime.id, version: browser.runtime.getManifest().version });
-  browser.browserAction.setBadgeText({ text: "on" });
-  browser.browserAction.setBadgeBackgroundColor({ color: "#12A150" });
+  refreshBadge();
   console.log("[ffmcp] подключён к native-хосту");
 }
 
 function scheduleReconnect() {
-  browser.browserAction.setBadgeText({ text: "off" });
-  browser.browserAction.setBadgeBackgroundColor({ color: "#C62828" });
+  refreshBadge();
   // Сбрасываем задержку только если соединение реально пожило: иначе
   // «успешный» connectNative с мгновенным отвалом обнуляет backoff и
   // превращает переподключение в цикл со спавном процесса каждые 500 мс.

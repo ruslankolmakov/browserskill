@@ -17,4 +17,46 @@
     s.reconnect();
     window.close();
   });
+
+  const box = document.getElementById("approvals");
+  function renderApprovals() {
+    box.textContent = "";
+    for (const a of s.pendingApprovals()) {
+      const c = a.client || {};
+      const card = document.createElement("div");
+      card.className = "approval";
+
+      const who = document.createElement("div");
+      who.className = "who";
+      who.textContent = "🔐 " + (c.name || "процесс") + (c.pid ? " · pid " + c.pid : "");
+      card.appendChild(who);
+
+      if (c.argv) {
+        const cmd = document.createElement("div");
+        cmd.className = "cmd";
+        cmd.textContent = c.argv;
+        card.appendChild(cmd);
+      }
+
+      const btn = (label, decision, scope, cls) => {
+        const b = document.createElement("button");
+        b.textContent = label;
+        b.className = cls;
+        b.addEventListener("click", () => {
+          s.decideApproval(a.reqId, decision, scope);
+          renderApprovals();
+        });
+        card.appendChild(b);
+      };
+      btn("Разрешить это подключение", "approve", "connection", "ok");
+      btn("Разрешить на эту сессию", "approve", "session", "ok");
+      btn("Разрешить навсегда", "approve", "forever", "ok");
+      btn("Отклонить", "deny", null, "no");
+      box.appendChild(card);
+    }
+  }
+  renderApprovals();
+  // Пока popup открыт, подхватываем новые запросы.
+  const poll = setInterval(renderApprovals, 1000);
+  window.addEventListener("unload", () => clearInterval(poll));
 })();

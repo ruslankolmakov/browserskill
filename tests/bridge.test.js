@@ -6,7 +6,9 @@ const path = require("node:path");
 
 const DIR = path.join(os.tmpdir(), "ffmcp-e2e-" + process.pid);
 fs.mkdirSync(DIR, { recursive: true });
-const env = { ...process.env, FFMCP_DIR: DIR };
+// Этот тест проверяет транспорт MCP → сокет → хост → расширение; гейт
+// подтверждения выключаем, ему посвящён отдельный approval.test.js.
+const env = { ...process.env, FFMCP_DIR: DIR, FFMCP_APPROVAL: "0" };
 const ROOT = require("node:path").join(__dirname, "..");
 
 const host = spawn("node", [ROOT + "/bin/ffmcp-host.js"], { env, stdio: ["pipe", "pipe", "inherit"] });

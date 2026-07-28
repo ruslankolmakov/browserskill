@@ -12,10 +12,31 @@ const net = require("node:net");
 const fs = require("node:fs");
 const path = require("node:path");
 const os = require("node:os");
+const crypto = require("node:crypto");
 
 const STATE_DIR = process.env.FFMCP_DIR || path.join(os.homedir(), ".ffmcp");
 const SOCKET_PATH = path.join(STATE_DIR, "ffmcp.sock");
 const SERVER_INFO = { name: "ffmcp", version: "1.0.0" };
+
+// Стабильный токен установки: по нему хост узнаёт «сессионные» и «навсегда»
+// одобренные клиенты после переподключения. Лежит рядом с сокетом, 0600.
+function clientToken() {
+  const p = path.join(STATE_DIR, "client-token");
+  try {
+    const t = fs.readFileSync(p, "utf8").trim();
+    if (t) return t;
+  } catch {}
+  const t = crypto.randomBytes(16).toString("hex");
+  try {
+    fs.mkdirSync(STATE_DIR, { recursive: true, mode: 0o700 });
+    fs.writeFileSync(p, t, { mode: 0o600 });
+  } catch {}
+  return t;
+}
+const TOKEN = clientToken();
+const CLIENT = { name: "MCP-сервер", pid: process.pid, argv: process.argv.slice(1).join(" ").slice(0, 300) };
+// Сколько ждать ручного подтверждения пользователя (с запасом над таймаутом хоста).
+const APPROVAL_WAIT_MS = 130000;
 
 /* ---------- клиент Unix-сокета с переподключением ---------- */
 
@@ -87,18 +108,26 @@ async function call(op, params = {}, timeoutMs = 45000) {
   const s = await connect();
   const id = nextId++;
   const res = await new Promise((resolve) => {
-    const timer = setTimeout(
-      () => {
+    let timer;
+    const arm = (ms, err) => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
         waiting.delete(id);
-        resolve({ ok: false, error: `таймаут ожидания ответа хоста (${timeoutMs} мс)` });
-      },
-      timeoutMs + 5000
-    );
+        resolve({ ok: false, error: err });
+      }, ms);
+    };
     waiting.set(id, (m) => {
+      // Хост ждёт ручного подтверждения — продлеваем ожидание, не считая это
+      // таймаутом операции.
+      if (m && m.pending) {
+        arm(APPROVAL_WAIT_MS, "таймаут ожидания подтверждения доступа пользователем");
+        return;
+      }
       clearTimeout(timer);
       resolve(m);
     });
-    s.write(JSON.stringify({ id, op, params, timeoutMs }) + "\n");
+    arm(timeoutMs + 5000, `таймаут ожидания ответа хоста (${timeoutMs} мс)`);
+    s.write(JSON.stringify({ id, op, params, timeoutMs, token: TOKEN, client: CLIENT }) + "\n");
   });
   if (!res.ok) throw new Error(res.error);
   return res.value;

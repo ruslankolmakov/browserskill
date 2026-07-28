@@ -17,10 +17,29 @@ const net = require("node:net");
 const fs = require("node:fs");
 const path = require("node:path");
 const os = require("node:os");
+const crypto = require("node:crypto");
 const { execFileSync } = require("node:child_process");
 
 const STATE_DIR = process.env.FFMCP_DIR || path.join(os.homedir(), ".ffmcp");
 const SOCKET_PATH = path.join(STATE_DIR, "ffmcp.sock");
+
+// Тот же токен установки, что использует MCP-сервер: одобрив клиента «навсегда»
+// однажды, пользователь покрывает и CLI, и агента.
+function clientToken() {
+  const p = path.join(STATE_DIR, "client-token");
+  try {
+    const t = fs.readFileSync(p, "utf8").trim();
+    if (t) return t;
+  } catch {}
+  const t = crypto.randomBytes(16).toString("hex");
+  try {
+    fs.mkdirSync(STATE_DIR, { recursive: true, mode: 0o700 });
+    fs.writeFileSync(p, t, { mode: 0o600 });
+  } catch {}
+  return t;
+}
+const TOKEN = clientToken();
+const CLIENT = { name: "CLI", pid: process.pid, argv: process.argv.slice(2).join(" ").slice(0, 300) };
 const HOST_MANIFEST = path.join(
   os.homedir(),
   "Library/Application Support/Mozilla/NativeMessagingHosts/ffmcp.json"
@@ -50,19 +69,39 @@ function callHost(op, params = {}, timeoutMs = 45000) {
     }
     const s = net.createConnection(SOCKET_PATH);
     let buf = "";
-    const timer = setTimeout(() => {
-      s.destroy();
-      reject(new Error("таймаут"));
-    }, timeoutMs + 5000);
-    s.on("connect", () => s.write(JSON.stringify({ id: 1, op, params, timeoutMs }) + "\n"));
+    let timer;
+    const arm = (ms, err) => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        s.destroy();
+        reject(new Error(err));
+      }, ms);
+    };
+    arm(timeoutMs + 5000, "таймаут");
+    s.on("connect", () => s.write(JSON.stringify({ id: 1, op, params, timeoutMs, token: TOKEN, client: CLIENT }) + "\n"));
     s.on("data", (d) => {
       buf += d.toString();
-      const i = buf.indexOf("\n");
-      if (i === -1) return;
-      clearTimeout(timer);
-      s.end();
-      const msg = JSON.parse(buf.slice(0, i));
-      msg.ok ? resolve(msg.value) : reject(new Error(msg.error));
+      let i;
+      while ((i = buf.indexOf("\n")) !== -1) {
+        const line = buf.slice(0, i);
+        buf = buf.slice(i + 1);
+        if (!line.trim()) continue;
+        let msg;
+        try {
+          msg = JSON.parse(line);
+        } catch {
+          continue;
+        }
+        // Хост ждёт, пока пользователь подтвердит доступ в popup расширения.
+        if (msg.pending) {
+          arm(130000, "таймаут ожидания подтверждения доступа пользователем");
+          console.error("⏳ жду подтверждения доступа в Firefox (значок ffmcp)…");
+          continue;
+        }
+        clearTimeout(timer);
+        s.end();
+        return msg.ok ? resolve(msg.value) : reject(new Error(msg.error));
+      }
     });
     s.on("error", (e) => {
       clearTimeout(timer);

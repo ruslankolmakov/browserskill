@@ -42,7 +42,8 @@ const browser = {
     onUpdated: ev("tabUpd"),
   },
   storage: { local: { get: async () => ({}), set: async () => {}, remove: async () => {} } },
-  browserAction: { setBadgeText: () => {}, setBadgeBackgroundColor: () => {} },
+  browserAction: { setBadgeText: () => {}, setBadgeBackgroundColor: () => {}, openPopup: async () => {} },
+  notifications: { create: async () => {}, clear: async () => {}, onClicked: ev("notifClick") },
   find: { find: async () => ({}) },
 };
 
