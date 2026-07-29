@@ -1,7 +1,7 @@
 {
   "name": "ffmcp",
-  "version": "1.0.0",
-  "description": "Полный доступ к Firefox для MCP-агентов через native messaging и Unix-сокет. Без HTTP и открытых портов.",
+  "version": "1.1.0",
+  "description": "Полный доступ к Firefox и Chrome для MCP-агентов через native messaging и Unix-сокет. Без HTTP и открытых портов.",
   "bin": {
     "ffmcp": "bin/ffmcp.js"
   },
@@ -9,10 +9,13 @@
     "install-host": "./install.sh",
     "test": "./tests/run.sh",
     "doctor": "node bin/ffmcp.js doctor",
+    "browsers": "node bin/ffmcp.js browsers",
     "mcp": "node bin/ffmcp-mcp.js",
-    "build-xpi": "cd extension && zip -qr ../ffmcp.xpi . && echo ffmcp.xpi собран"
+    "icons": "node tools/make-icons.js",
+    "build-xpi": "cd extension && zip -qr ../ffmcp.xpi . && echo ffmcp.xpi собран",
+    "build-chrome-zip": "cd extension-chrome && zip -qr ../ffmcp-chrome.zip . && echo ffmcp-chrome.zip собран"
   },
-  "keywords": ["mcp", "firefox", "webextension", "native-messaging", "browser-automation"],
+  "keywords": ["mcp", "firefox", "chrome", "webextension", "native-messaging", "browser-automation"],
   "repository": {
     "type": "git",
     "url": "git+ssh://git@github.com/ruslankolmakov/ffmcp.git"

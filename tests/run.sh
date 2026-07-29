@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Прогон всех тестов. Живой Firefox не требуется — расширение и браузер
+# Прогон всех тестов. Живой браузер не требуется — расширение и браузер
 # заменяются заглушками, проверяется логика моста и защита от зацикливания.
 set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
@@ -7,8 +7,11 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 fail=0
 
 echo "▸ синтаксис"
-for f in extension/*.js bin/*.js; do
+for f in extension/*.js extension-chrome/*.js bin/*.js tools/*.js; do
   if node --check "$f" >/dev/null 2>&1; then echo "  ✅ $f"; else echo "  ❌ $f"; fail=1; fi
+done
+for f in extension/manifest.json extension-chrome/manifest.json; do
+  if node -e "JSON.parse(require('fs').readFileSync('$f'))" >/dev/null 2>&1; then echo "  ✅ $f"; else echo "  ❌ $f"; fail=1; fi
 done
 
 for t in tests/*.test.js; do

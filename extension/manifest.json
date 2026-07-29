@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "ffmcp bridge",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Полный доступ к Firefox для MCP-агентов через native messaging (без HTTP).",
   "browser_specific_settings": {
     "gecko": {

@@ -83,24 +83,31 @@ setTimeout(async () => {
   const bad = tools.filter((t) => !t.name || !t.description || t.inputSchema?.type !== "object");
   bad.length === 0 ? pass("схемы инструментов валидны") : fail("битые схемы: " + bad.map((t) => t.name).join(","));
 
-  const st = await rpc("tools/call", { name: "firefox_status", arguments: {} });
+  const st = await rpc("tools/call", { name: "browser_status", arguments: {} });
   JSON.parse(st.result.content[0].text).browser.version === "141.0"
-    ? pass("tools/call firefox_status прошёл через хост в расширение") : fail("status: " + JSON.stringify(st));
+    ? pass("tools/call browser_status прошёл через хост в расширение") : fail("status: " + JSON.stringify(st));
 
-  const ev = await rpc("tools/call", { name: "firefox_eval", arguments: { expression: "return 1", tabId: 7 } });
+  const ev = await rpc("tools/call", { name: "browser_eval", arguments: { expression: "return 1", tabId: 7 } });
   const evv = JSON.parse(ev.result.content[0].text);
   evv.params.tabId === 7 && evv.echoed === "page.eval" ? pass("аргументы доходят до расширения") : fail("eval: " + JSON.stringify(evv));
 
-  const err = await rpc("tools/call", { name: "firefox_click", arguments: { uid: "e1" } });
+  const err = await rpc("tools/call", { name: "browser_click", arguments: { uid: "e1" } });
   err.result.isError && /элемент не найден/.test(err.result.content[0].text)
     ? pass("ошибки расширения возвращаются как isError") : fail("ошибка: " + JSON.stringify(err.result));
 
   const unknown = await rpc("tools/call", { name: "нет_такого", arguments: {} });
   unknown.result.isError ? pass("неизвестный инструмент обработан") : fail("неизвестный инструмент");
 
+  // Имена из версии «только Firefox» не сломались, хотя в списке их больше нет.
+  const legacy = await rpc("tools/call", { name: "firefox_status", arguments: {} });
+  !legacy.result.isError && JSON.parse(legacy.result.content[0].text).browser.version === "141.0"
+    ? pass("старое имя firefox_status ещё работает") : fail("legacy: " + JSON.stringify(legacy.result));
+  tools.some((t) => t.name === "browser_list") && !tools.some((t) => t.name.startsWith("firefox_"))
+    ? pass("в списке только нейтральные browser_*") : fail("в tools/list остались firefox_*");
+
   // Чанкование напрямую через сокет
   const net = require("node:net");
-  const s = net.createConnection(path.join(DIR, "ffmcp.sock"));
+  const s = net.createConnection(path.join(DIR, "firefox.sock"));
   let sb = "";
   s.on("connect", () => s.write(JSON.stringify({ id: 99, op: "big", params: {} }) + "\n"));
   s.on("data", (d) => {
@@ -114,7 +121,7 @@ setTimeout(async () => {
         p.result ? pass("ping") : fail("ping");
         mcp.kill(); host.kill();
         setTimeout(() => {
-          fs.existsSync(path.join(DIR, "ffmcp.sock")) ? fail("сокет не убран после выхода") : pass("сокет очищен при завершении");
+          fs.existsSync(path.join(DIR, "firefox.sock")) ? fail("сокет не убран после выхода") : pass("сокет очищен при завершении");
           fs.rmSync(DIR, { recursive: true, force: true });
         }, 400);
       });

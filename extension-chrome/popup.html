@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<meta charset="utf-8" />
+<style>
+  body { font: 13px/1.5 system-ui, sans-serif; margin: 0; padding: 14px; width: 260px; }
+  h1 { font-size: 14px; margin: 0 0 8px; }
+  .row { display: flex; justify-content: space-between; margin: 4px 0; }
+  .k { color: #666; }
+  .v { font-weight: 600; }
+  .on { color: #12a150; }
+  .off { color: #c62828; }
+  button { width: 100%; margin-top: 8px; padding: 6px; }
+  #approvals:not(:empty) { margin: 12px 0 4px; }
+  .approval { border: 1px solid #e8a400; background: #fff8e6; border-radius: 6px; padding: 10px; margin-top: 10px; }
+  .approval .who { font-weight: 600; }
+  .approval .cmd { color: #666; font-size: 11px; word-break: break-all; margin: 2px 0 6px; }
+  .approval button { margin-top: 6px; }
+  .approval .ok { background: #12a150; color: #fff; border: 0; }
+  .approval .no { background: #fff; color: #c62828; border: 1px solid #c62828; }
+</style>
+<h1>ffmcp bridge — Chrome</h1>
+<div class="row"><span class="k">Native host</span><span class="v" id="status">…</span></div>
+<div class="row"><span class="k">Рабочее окно</span><span class="v" id="target">…</span></div>
+<div class="row"><span class="k">Вкладок</span><span class="v" id="tabs">…</span></div>
+<div class="row"><span class="k">Сообщений console</span><span class="v" id="console">…</span></div>
+<div class="row"><span class="k">Запросов сети</span><span class="v" id="net">…</span></div>
+<div id="approvals"></div>
+<button id="reload">Переподключить</button>
+<script src="popup.js"></script>

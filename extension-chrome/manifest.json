@@ -1,0 +1,72 @@
+{
+  "manifest_version": 3,
+  "name": "ffmcp bridge",
+  "version": "1.1.0",
+  "description": "Полный доступ к Chrome для MCP-агентов через native messaging (без HTTP).",
+  "minimum_chrome_version": "120",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA2oQrSW0Ux/0fc6eDlDeprOm293yYmMofYMWR6acfIWLD3g39UabQ1Nc56fNv2S/x+CElcL4jXibACVVADNnHI56gGsMNl4OEOwVH3gfB82lDpuxbRxLSIMlrHl6hvOFaRnB7+92YGa/EiCqXuwQT7555hKtX8/fNcQn3Nyo9xgYMFKc8g2clUyM5lQzuRtvxFTNXV7Rbl1vwMjgPy385m4629puVDBoWHt7KkVpnppQI+xTge6PAMT7Oy/370ESo+bzoy3cSPDS/5rTKhDWZm/P2jap2V4UiUhhsFhuGSmDnIuEap5c//UYFEY6Zun1Y/HavWsaAVXhNmAnYtuHfiQIDAQAB",
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "ffmcp",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["console-hook-main.js"],
+      "world": "MAIN",
+      "run_at": "document_start",
+      "all_frames": true
+    },
+    {
+      "matches": ["<all_urls>"],
+      "js": ["console-hook.js"],
+      "world": "ISOLATED",
+      "run_at": "document_start",
+      "all_frames": true
+    }
+  ],
+  "permissions": [
+    "nativeMessaging",
+    "tabs",
+    "activeTab",
+    "scripting",
+    "userScripts",
+    "webNavigation",
+    "webRequest",
+    "cookies",
+    "history",
+    "bookmarks",
+    "downloads",
+    "downloads.open",
+    "storage",
+    "unlimitedStorage",
+    "sessions",
+    "browsingData",
+    "management",
+    "clipboardRead",
+    "clipboardWrite",
+    "notifications",
+    "privacy",
+    "proxy",
+    "topSites",
+    "pageCapture",
+    "idle",
+    "alarms",
+    "search",
+    "contextMenus"
+  ],
+  "host_permissions": ["<all_urls>"]
+}

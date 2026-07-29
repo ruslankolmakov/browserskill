@@ -11,7 +11,7 @@ const DIR = path.join(os.tmpdir(), "ffmcp-approval-" + process.pid);
 fs.mkdirSync(DIR, { recursive: true });
 const env = { ...process.env, FFMCP_DIR: DIR, FFMCP_APPROVAL_TIMEOUT_MS: "1000" };
 const ROOT = path.join(__dirname, "..");
-const SOCK = path.join(DIR, "ffmcp.sock");
+const SOCK = path.join(DIR, "firefox.sock");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 let okN = 0;
@@ -127,10 +127,10 @@ setTimeout(() => sendNative({ type: "hello", extension: "ffmcp@local", version: 
   await sleep(50);
   let persisted = false;
   try {
-    persisted = (JSON.parse(fs.readFileSync(path.join(DIR, "allowed.json"), "utf8")).tokens || []).includes("tE");
+    persisted = (JSON.parse(fs.readFileSync(path.join(DIR, "allowed-firefox.json"), "utf8")).tokens || []).includes("tE");
   } catch {}
   e.final.ok && persisted
-    ? pass("forever: токен записан в allowed.json")
+    ? pass("forever: токен записан в allowed-firefox.json")
     : fail("forever: " + JSON.stringify({ ok: e.final.ok, persisted }));
 
   // F — health-check ping не гейтится

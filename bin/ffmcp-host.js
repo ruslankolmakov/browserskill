@@ -1,9 +1,13 @@
 #!/usr/bin/env node
 /* ffmcp native messaging host.
  *
- * Запускается самим Firefox. С одной стороны — native messaging по stdio
- * (4 байта длины little-endian + JSON), с другой — Unix-сокет, к которому
- * подключаются MCP-серверы. Никаких TCP-портов и HTTP.
+ * Запускается самим браузером (Firefox или Chrome). С одной стороны — native
+ * messaging по stdio (4 байта длины little-endian + JSON), с другой —
+ * Unix-сокет, к которому подключаются MCP-серверы. Никаких TCP-портов и HTTP.
+ *
+ * У каждого браузера свой экземпляр хоста и свой сокет: ~/.ffmcp/firefox.sock,
+ * ~/.ffmcp/chrome.sock. Браузер задаётся флагом --browser= из лаунчера, который
+ * генерирует install.sh.
  */
 
 "use strict";
@@ -13,17 +17,36 @@ const fs = require("node:fs");
 const path = require("node:path");
 const os = require("node:os");
 
+// Chrome передаёт хосту origin расширения (chrome-extension://…), Firefox —
+// путь манифеста и id дополнения. Флаг из лаунчера главнее, но если лаунчер
+// старый — узнаём браузер по этим аргументам.
+function detectBrowser(argv) {
+  const flag = argv.find((a) => a.startsWith("--browser="));
+  if (flag) {
+    const name = flag.slice("--browser=".length).toLowerCase();
+    if (name === "chrome" || name === "firefox") return name;
+  }
+  if (argv.some((a) => a.startsWith("chrome-extension://"))) return "chrome";
+  return "firefox";
+}
+
+const BROWSER = detectBrowser(process.argv.slice(2));
+
 const STATE_DIR = process.env.FFMCP_DIR || path.join(os.homedir(), ".ffmcp");
-const SOCKET_PATH = path.join(STATE_DIR, "ffmcp.sock");
-const OWNER_PATH = path.join(STATE_DIR, "host.pid");
-const LOG_PATH = path.join(STATE_DIR, "host.log");
-const ALLOW_PATH = path.join(STATE_DIR, "allowed.json");
+const SOCKET_PATH = path.join(STATE_DIR, `${BROWSER}.sock`);
+const OWNER_PATH = path.join(STATE_DIR, `${BROWSER}.pid`);
+const LOG_PATH = path.join(STATE_DIR, `${BROWSER}.log`);
+// Одобрение «навсегда» действует в пределах браузера: разрешив агенту Firefox,
+// пользователь не разрешает ему заодно и Chrome.
+const ALLOW_PATH = path.join(STATE_DIR, `allowed-${BROWSER}.json`);
 
 // Каждое подключение MCP-клиента к сокету пользователь подтверждает вручную
 // (нотификация → popup расширения). Здоровьесберегающие операции (__status,
 // ping) не гейтятся. FFMCP_APPROVAL=0 полностью отключает гейт (headless/CI).
 const APPROVAL_ON = process.env.FFMCP_APPROVAL !== "0";
-const APPROVAL_TIMEOUT_MS = Number(process.env.FFMCP_APPROVAL_TIMEOUT_MS) || 60000;
+// Две минуты, а не одна: значок расширения бывает спрятан в меню «Расширения»,
+// и минуты на то, чтобы его найти и нажать кнопку, человеку не хватает.
+const APPROVAL_TIMEOUT_MS = Number(process.env.FFMCP_APPROVAL_TIMEOUT_MS) || 120000;
 const EXEMPT_OPS = new Set(["ping"]); // __status обрабатывается ещё раньше
 
 fs.mkdirSync(STATE_DIR, { recursive: true, mode: 0o700 });
@@ -75,7 +98,7 @@ process.stdin.on("data", (buf) => {
 });
 
 process.stdin.on("end", () => {
-  log("Firefox закрыл stdin — выходим");
+  log(`${BROWSER} закрыл stdin — выходим`);
   cleanup();
   process.exit(0);
 });
@@ -233,7 +256,7 @@ async function handleClientRequest(conn, req) {
   };
 
   if (req.op === "__status") {
-    reply({ ok: true, value: { extensionReady, pending: pending.size, pid: process.pid } });
+    reply({ ok: true, value: { browser: BROWSER, extensionReady, pending: pending.size, pid: process.pid } });
     return;
   }
 
@@ -250,7 +273,7 @@ async function handleClientRequest(conn, req) {
       });
     });
     if (!waited) {
-      reply({ ok: false, error: "расширение ffmcp не подключено к хосту" });
+      reply({ ok: false, error: `расширение ffmcp не подключено к хосту (${BROWSER})` });
       return;
     }
   }
@@ -269,8 +292,8 @@ async function handleClientRequest(conn, req) {
           ok: false,
           error:
             decision === "timeout"
-              ? "доступ к Firefox не подтверждён (таймаут подтверждения)"
-              : "доступ к Firefox отклонён пользователем",
+              ? `доступ к ${BROWSER} не подтверждён (таймаут подтверждения)`
+              : `доступ к ${BROWSER} отклонён пользователем`,
         });
         return;
       }
@@ -287,7 +310,7 @@ async function handleClientRequest(conn, req) {
 server.listen(SOCKET_PATH, () => {
   fs.chmodSync(SOCKET_PATH, 0o600);
   fs.writeFileSync(OWNER_PATH, String(process.pid));
-  log("хост запущен, сокет:", SOCKET_PATH, "pid", process.pid);
+  log(`хост запущен (${BROWSER}), сокет:`, SOCKET_PATH, "pid", process.pid);
 });
 
 server.on("error", (e) => {
