@@ -9,10 +9,10 @@
  * частоты — ни одна страница не должна быть в состоянии засыпать фон.
  */
 (() => {
-  if (window.__ffmcpConsoleHook) return;
-  window.__ffmcpConsoleHook = true;
+  if (window.__browserskillConsoleHook) return;
+  window.__browserskillConsoleHook = true;
 
-  const CHANNEL = "ffmcp-" + Math.random().toString(36).slice(2);
+  const CHANNEL = "browserskill-" + Math.random().toString(36).slice(2);
   const FLUSH_MS = 250;
   const MAX_BATCH = 200;
 
@@ -24,7 +24,7 @@
     if (!batch.length) return;
     const items = batch;
     batch = [];
-    browser.runtime.sendMessage({ __ffmcp: "console-batch", items }).catch(() => {});
+    browser.runtime.sendMessage({ __browserskill: "console-batch", items }).catch(() => {});
   }
 
   // Пачками, а не по сообщению: одна запись в консоль не должна стоить одного IPC.
@@ -39,8 +39,8 @@
   });
 
   const src = `(() => {
-    if (window.__ffmcpPageHook) return;
-    window.__ffmcpPageHook = true;
+    if (window.__browserskillPageHook) return;
+    window.__browserskillPageHook = true;
 
     const CHANNEL = ${JSON.stringify(CHANNEL)};
     const RATE_LIMIT = 100;      // сообщений в секунду
@@ -72,7 +72,7 @@
           try {
             document.dispatchEvent(new CustomEvent(CHANNEL, { detail: JSON.stringify({
               level: "warn",
-              text: "[ffmcp] пропущено сообщений из-за лимита частоты: " + n,
+              text: "[browserskill] пропущено сообщений из-за лимита частоты: " + n,
               stack: null }) }));
           } catch (e) {} finally { sending = false; }
           return;

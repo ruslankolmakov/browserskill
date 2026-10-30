@@ -1,7 +1,7 @@
 /* Popup расширения. В MV3 нет getBackgroundPage, поэтому состояние берём
  * сообщениями у service worker. */
 
-const ask = (cmd, extra = {}) => chrome.runtime.sendMessage({ __ffmcp: "popup", cmd, ...extra });
+const ask = (cmd, extra = {}) => chrome.runtime.sendMessage({ __browserskill: "popup", cmd, ...extra });
 
 const box = document.getElementById("approvals");
 let current = null;

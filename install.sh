@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# Регистрирует native messaging хосты ffmcp для Firefox и Chrome на macOS.
+# Регистрирует native messaging хосты browserskill для Firefox и Chrome на macOS
+# и ставит скилл browserskill в ~/.claude/skills.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-STATE_DIR="${FFMCP_DIR:-$HOME/.ffmcp}"
+STATE_DIR="${BROWSERSKILL_DIR:-$HOME/.browserskill}"
 NODE_BIN="$(command -v node)"
-FF_EXT_ID="ffmcp@local"
+FF_EXT_ID="browserskill@local"
 # ID расширения Chrome детерминирован: он выведен из поля "key" в
 # extension-chrome/manifest.json, поэтому одинаков на любой машине.
 CHROME_EXT_ID="mifolcjccjkcdfdoebmkgklimogoemng"
@@ -26,11 +27,17 @@ make_launcher() {
   local browser="$1" file="$STATE_DIR/host-$1.sh"
   cat > "$file" <<EOF
 #!/bin/sh
-exec "$NODE_BIN" "$ROOT/bin/ffmcp-host.js" --browser=$browser "\$@"
+exec "$NODE_BIN" "$ROOT/bin/browserskill-host.js" --browser=$browser "\$@"
 EOF
   chmod +x "$file"
   echo "$file"
 }
+
+# --- Скилл для Claude Code: SKILL.md из репозитория с подставленным путём ---
+SKILL_DIR="${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}/browserskill"
+mkdir -p "$SKILL_DIR"
+sed "s|__ROOT__|$ROOT|g" "$ROOT/skill/SKILL.md" > "$SKILL_DIR/SKILL.md"
+echo "✅ скилл: $SKILL_DIR/SKILL.md"
 
 FF_LAUNCHER="$(make_launcher firefox)"
 CHROME_LAUNCHER="$(make_launcher chrome)"
@@ -42,16 +49,16 @@ FF_DIRS=(
 
 for dir in "${FF_DIRS[@]}"; do
   mkdir -p "$dir"
-  cat > "$dir/ffmcp.json" <<EOF
+  cat > "$dir/browserskill.json" <<EOF
 {
-  "name": "ffmcp",
-  "description": "ffmcp bridge — доступ MCP-агентов к Firefox",
+  "name": "browserskill",
+  "description": "browserskill bridge — доступ агентов к Firefox",
   "path": "$FF_LAUNCHER",
   "type": "stdio",
   "allowed_extensions": ["$FF_EXT_ID"]
 }
 EOF
-  echo "✅ Firefox: $dir/ffmcp.json"
+  echo "✅ Firefox: $dir/browserskill.json"
 done
 
 # --- Chrome и родня: allowed_origins с origin расширения ---
@@ -73,16 +80,16 @@ for base in "${CHROME_DIRS[@]}"; do
   [[ -d "$base" ]] || continue
   dir="$base/NativeMessagingHosts"
   mkdir -p "$dir"
-  cat > "$dir/ffmcp.json" <<EOF
+  cat > "$dir/browserskill.json" <<EOF
 {
-  "name": "ffmcp",
-  "description": "ffmcp bridge — доступ MCP-агентов к Chrome",
+  "name": "browserskill",
+  "description": "browserskill bridge — доступ агентов к Chrome",
   "path": "$CHROME_LAUNCHER",
   "type": "stdio",
   "allowed_origins": ["chrome-extension://$CHROME_EXT_ID/"]
 }
 EOF
-  echo "✅ Chrome:  $dir/ffmcp.json"
+  echo "✅ Chrome:  $dir/browserskill.json"
   chrome_found=1
 done
 
@@ -103,9 +110,9 @@ echo "    1. chrome://extensions → включи «Режим разработ�
 echo "    2. «Загрузить распакованное расширение» → $ROOT/extension-chrome"
 echo "    3. ID должен получиться $CHROME_EXT_ID"
 echo "    4. По желанию: в карточке расширения включи «Разрешить пользовательские скрипты»"
-echo "       — без этого browser_eval не работает на сайтах со строгим CSP"
+echo "       — без этого eval не работает на сайтах со строгим CSP"
 echo
-echo "  Проверка: $ROOT/bin/ffmcp.js doctor"
+echo "  Проверка: $ROOT/bin/browserskill.js doctor"
 echo
-echo "Подключение к Claude Code (один сервер на оба браузера):"
-echo "  claude mcp add browser -- $NODE_BIN $ROOT/bin/ffmcp-mcp.js"
+echo "Скилл для Claude Code: $SKILL_DIR/SKILL.md"
+echo "Агент вызывает CLI напрямую: $ROOT/bin/browserskill.js <команда>"

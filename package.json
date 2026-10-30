@@ -1,24 +1,31 @@
 {
-  "name": "ffmcp",
+  "name": "browserskill",
   "version": "1.1.0",
-  "description": "Полный доступ к Firefox и Chrome для MCP-агентов через native messaging и Unix-сокет. Без HTTP и открытых портов.",
+  "description": "CLI и скилл для управления Firefox и Chrome из агентов через native messaging и Unix-сокет. Без HTTP и открытых портов.",
   "bin": {
-    "ffmcp": "bin/ffmcp.js"
+    "browserskill": "bin/browserskill.js"
   },
   "scripts": {
     "install-host": "./install.sh",
     "test": "./tests/run.sh",
-    "doctor": "node bin/ffmcp.js doctor",
-    "browsers": "node bin/ffmcp.js browsers",
-    "mcp": "node bin/ffmcp-mcp.js",
+    "doctor": "node bin/browserskill.js doctor",
+    "browsers": "node bin/browserskill.js browsers",
     "icons": "node tools/make-icons.js",
-    "build-xpi": "cd extension && zip -qr ../ffmcp.xpi . && echo ffmcp.xpi собран",
-    "build-chrome-zip": "cd extension-chrome && zip -qr ../ffmcp-chrome.zip . && echo ffmcp-chrome.zip собран"
+    "build-xpi": "cd extension && zip -qr ../browserskill.xpi . && echo browserskill.xpi собран",
+    "build-chrome-zip": "cd extension-chrome && zip -qr ../browserskill-chrome.zip . && echo browserskill-chrome.zip собран"
   },
-  "keywords": ["mcp", "firefox", "chrome", "webextension", "native-messaging", "browser-automation"],
+  "keywords": [
+    "cli",
+    "skill",
+    "firefox",
+    "chrome",
+    "webextension",
+    "native-messaging",
+    "browser-automation"
+  ],
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com/ruslankolmakov/ffmcp.git"
+    "url": "git+ssh://git@github.com/ruslankolmakov/browserskill.git"
   },
   "engines": {
     "node": ">=18"

@@ -66,11 +66,11 @@ console.log(`✅ инжекция перехватчика: ${Date.now() - t0} �
 
 // Имитируем страничную часть: берём исходник, который hook кладёт в <script>.
 const pageSrc = hook.match(/const src = `([\s\S]*?)`;\n/)[1]
-  .replace(/\$\{JSON\.stringify\(CHANNEL\)\}/, '"ffmcp-test"');
+  .replace(/\$\{JSON\.stringify\(CHANNEL\)\}/, '"browserskill-test"');
 vm.runInContext(pageSrc, page.win, { timeout: 4000 });
 // Подписываем контент-часть на тот же канал.
-vm.runInContext(`document.addEventListener("ffmcp-test", (ev) => {
-  browser.runtime.sendMessage({ __ffmcp: "console-batch", items: [JSON.parse(String(ev.detail))] });
+vm.runInContext(`document.addEventListener("browserskill-test", (ev) => {
+  browser.runtime.sendMessage({ __browserskill: "console-batch", items: [JSON.parse(String(ev.detail))] });
 });`, page.win);
 
 const t1 = Date.now();

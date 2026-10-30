@@ -1,11 +1,11 @@
 {
   "manifest_version": 2,
-  "name": "ffmcp bridge",
+  "name": "browserskill bridge",
   "version": "1.1.0",
-  "description": "Полный доступ к Firefox для MCP-агентов через native messaging (без HTTP).",
+  "description": "Полный доступ к Firefox для агентов через native messaging (без HTTP).",
   "browser_specific_settings": {
     "gecko": {
-      "id": "ffmcp@local",
+      "id": "browserskill@local",
       "strict_min_version": "115.0"
     }
   },
@@ -14,7 +14,7 @@
     "persistent": true
   },
   "browser_action": {
-    "default_title": "ffmcp",
+    "default_title": "browserskill",
     "default_popup": "popup.html"
   },
   "permissions": [

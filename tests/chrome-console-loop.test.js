@@ -7,7 +7,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 
-const CHANNEL = "ffmcp-console-v1";
+const CHANNEL = "browserskill-console-v1";
 
 function makePage() {
   const custom = {};

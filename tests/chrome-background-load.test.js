@@ -19,7 +19,7 @@ const chrome = {
     onStartup: ev("startup"),
     onInstalled: ev("installed"),
     getManifest: () => ({ version: "1.1.0" }),
-    getURL: (p) => "chrome-extension://ffmcp/" + p,
+    getURL: (p) => "chrome-extension://browserskill/" + p,
     sendMessage: async () => {},
     connectNative: () => ({
       postMessage: (m) => nativeMessages.push(m),

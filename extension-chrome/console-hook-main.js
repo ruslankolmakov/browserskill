@@ -11,10 +11,10 @@
  * Имя канала обязано совпадать с console-hook.js и background.js.
  */
 (() => {
-  if (window.__ffmcpPageHook) return;
-  window.__ffmcpPageHook = true;
+  if (window.__browserskillPageHook) return;
+  window.__browserskillPageHook = true;
 
-  const CHANNEL = "ffmcp-console-v1";
+  const CHANNEL = "browserskill-console-v1";
   const RATE_LIMIT = 100; // сообщений в секунду
   let sending = false;
   let windowStart = Date.now();
@@ -52,7 +52,7 @@
         dropped = 0;
         windowStart = now;
         sentInWindow = 1;
-        emit({ level: "warn", text: "[ffmcp] пропущено сообщений из-за лимита частоты: " + n, stack: null });
+        emit({ level: "warn", text: "[browserskill] пропущено сообщений из-за лимита частоты: " + n, stack: null });
         return;
       }
       windowStart = now;

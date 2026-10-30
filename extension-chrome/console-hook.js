@@ -7,10 +7,10 @@
  * Имя канала обязано совпадать с console-hook-main.js.
  */
 (() => {
-  if (window.__ffmcpConsoleBridge) return;
-  window.__ffmcpConsoleBridge = true;
+  if (window.__browserskillConsoleBridge) return;
+  window.__browserskillConsoleBridge = true;
 
-  const CHANNEL = "ffmcp-console-v1";
+  const CHANNEL = "browserskill-console-v1";
   const FLUSH_MS = 250;
   const MAX_BATCH = 200;
 
@@ -24,7 +24,7 @@
     batch = [];
     try {
       // Service worker мог уснуть — промах отправки не должен ломать страницу.
-      chrome.runtime.sendMessage({ __ffmcp: "console-batch", items }).catch(() => {});
+      chrome.runtime.sendMessage({ __browserskill: "console-batch", items }).catch(() => {});
     } catch (e) {}
   }
 

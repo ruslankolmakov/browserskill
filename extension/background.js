@@ -1,10 +1,10 @@
-/* ffmcp bridge — background script.
+/* browserskill bridge — background script.
  *
- * Держит соединение с native-messaging хостом `ffmcp` и исполняет
+ * Держит соединение с native-messaging хостом `browserskill` и исполняет
  * приходящие от него операции с полными правами WebExtension API.
  */
 
-const HOST_NAME = "ffmcp";
+const HOST_NAME = "browserskill";
 const CHUNK_LIMIT = 700 * 1024; // native messaging ограничивает размер сообщения
 
 let port = null;
@@ -17,7 +17,7 @@ const RING = 2000;
 const consoleLog = [];
 const networkLog = [];
 
-// Запросы MCP-клиентов на доступ, ждущие решения пользователя в popup.
+// Запросы клиентов на доступ, ждущие решения пользователя в popup.
 const pendingApprovals = new Map(); // reqId -> { reqId, client, token, ts }
 
 function refreshBadge() {
@@ -35,7 +35,7 @@ function refreshBadge() {
 }
 
 // Состояние для popup (top-level const не виден через getBackgroundPage).
-window.__ffmcp = {
+window.__browserskill = {
   consoleLog,
   networkLog,
   connected: () => port !== null,
@@ -45,7 +45,7 @@ window.__ffmcp = {
   decideApproval: (reqId, decision, scope) => {
     if (port) port.postMessage({ type: "approval-decision", reqId, decision, scope });
     pendingApprovals.delete(reqId);
-    browser.notifications.clear("ffmcp-approval-" + reqId).catch(() => {});
+    browser.notifications.clear("browserskill-approval-" + reqId).catch(() => {});
     refreshBadge();
   },
 };
@@ -60,10 +60,10 @@ function onApprovalRequest(msg) {
   const c = msg.client || {};
   const who = c.name ? `${c.name}${c.pid ? " (pid " + c.pid + ")" : ""}` : "локальный процесс";
   browser.notifications
-    .create("ffmcp-approval-" + msg.reqId, {
+    .create("browserskill-approval-" + msg.reqId, {
       type: "basic",
-      title: "ffmcp: запрос доступа к Firefox",
-      message: `${who} хочет управлять браузером. Откройте значок ffmcp, чтобы разрешить или отклонить.`,
+      title: "browserskill: запрос доступа к Firefox",
+      message: `${who} хочет управлять браузером. Откройте значок browserskill, чтобы разрешить или отклонить.`,
     })
     .catch(() => {});
   refreshBadge();
@@ -71,13 +71,13 @@ function onApprovalRequest(msg) {
 
 function onApprovalExpired(msg) {
   pendingApprovals.delete(msg.reqId);
-  browser.notifications.clear("ffmcp-approval-" + msg.reqId).catch(() => {});
+  browser.notifications.clear("browserskill-approval-" + msg.reqId).catch(() => {});
   refreshBadge();
 }
 
 // Клик по нотификации открывает popup — кнопок в самих нотификациях Firefox нет.
 browser.notifications.onClicked.addListener((id) => {
-  if (id.startsWith("ffmcp-approval-") && browser.browserAction.openPopup) {
+  if (id.startsWith("browserskill-approval-") && browser.browserAction.openPopup) {
     browser.browserAction.openPopup().catch(() => {});
   }
 });
@@ -103,7 +103,7 @@ function admit() {
         tabId: null,
         url: null,
         level: "warn",
-        text: `[ffmcp] отброшено записей консоли из-за лимита: ${intakeDropped}`,
+        text: `[browserskill] отброшено записей консоли из-за лимита: ${intakeDropped}`,
         stack: null,
       });
       intakeDropped = 0;
@@ -132,8 +132,8 @@ function recordConsole(entry, sender) {
 
 browser.runtime.onMessage.addListener((msg, sender) => {
   if (!msg) return;
-  if (msg.__ffmcp === "console") recordConsole(msg, sender);
-  else if (msg.__ffmcp === "console-batch" && Array.isArray(msg.items)) {
+  if (msg.__browserskill === "console") recordConsole(msg, sender);
+  else if (msg.__browserskill === "console-batch" && Array.isArray(msg.items)) {
     for (const item of msg.items.slice(0, 200)) recordConsole(item, sender);
   }
 });
@@ -177,7 +177,7 @@ async function resolveTabId(tabId) {
 
 /* ---------- закреплённое рабочее окно ---------- */
 
-const TARGET_KEY = "ffmcpTargetWindow";
+const TARGET_KEY = "browserskillTargetWindow";
 let targetWindowId = null;
 
 // Возвращает id закреплённого окна либо null. Если окно закрыли — снимает
@@ -252,7 +252,7 @@ function wrapExpression(expression) {
         return (...args) => {
           try {
             browser.runtime.sendMessage({
-              __ffmcp: "console",
+              __browserskill: "console",
               level,
               text: args.map((a) => {
                 try {
@@ -287,7 +287,7 @@ const SNAPSHOT_CODE = `(() => {
     const cs = getComputedStyle(el);
     if (cs.visibility === 'hidden' || cs.display === 'none' || cs.opacity === '0') continue;
     const uid = 'e' + (++i);
-    el.setAttribute('data-ffmcp-uid', uid);
+    el.setAttribute('data-browserskill-uid', uid);
     const label = (el.getAttribute('aria-label') || el.innerText || el.value ||
                    el.placeholder || el.title || el.alt || '').trim().slice(0, 120);
     out.push({
@@ -310,7 +310,7 @@ const SNAPSHOT_CODE = `(() => {
 })()`;
 
 function byUid(uid) {
-  return `document.querySelector('[data-ffmcp-uid=${JSON.stringify(uid)}]')`;
+  return `document.querySelector('[data-browserskill-uid=${JSON.stringify(uid)}]')`;
 }
 
 function resolveTarget({ uid, selector }) {
@@ -746,7 +746,7 @@ function connect() {
   try {
     port = browser.runtime.connectNative(HOST_NAME);
   } catch (e) {
-    console.error("[ffmcp] connectNative провалился:", e);
+    console.error("[browserskill] connectNative провалился:", e);
     scheduleReconnect();
     return;
   }
@@ -760,10 +760,10 @@ function connect() {
 
   port.onDisconnect.addListener(() => {
     const e = browser.runtime.lastError || (port && port.error);
-    console.warn("[ffmcp] хост отключился:", e && e.message);
+    console.warn("[browserskill] хост отключился:", e && e.message);
     port = null;
     // Хост ушёл — решать по висящим запросам больше некому.
-    for (const id of pendingApprovals.keys()) browser.notifications.clear("ffmcp-approval-" + id).catch(() => {});
+    for (const id of pendingApprovals.keys()) browser.notifications.clear("browserskill-approval-" + id).catch(() => {});
     pendingApprovals.clear();
     scheduleReconnect();
   });
@@ -771,7 +771,7 @@ function connect() {
   connectedAt = Date.now();
   port.postMessage({ type: "hello", extension: browser.runtime.id, version: browser.runtime.getManifest().version });
   refreshBadge();
-  console.log("[ffmcp] подключён к native-хосту");
+  console.log("[browserskill] подключён к native-хосту");
 }
 
 function scheduleReconnect() {

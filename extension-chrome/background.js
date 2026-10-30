@@ -1,6 +1,6 @@
-/* ffmcp bridge — service worker (Chrome, MV3).
+/* browserskill bridge — service worker (Chrome, MV3).
  *
- * Держит соединение с native-messaging хостом `ffmcp` (запущенным с
+ * Держит соединение с native-messaging хостом `browserskill` (запущенным с
  * --browser=chrome) и исполняет приходящие от него операции с полными правами
  * WebExtension API. Набор операций совпадает с версией для Firefox —
  * различается только то, что MV3 делает иначе: внедрение скриптов через
@@ -8,10 +8,10 @@
  * недолговечного воркера.
  */
 
-const HOST_NAME = "ffmcp";
+const HOST_NAME = "browserskill";
 const CHUNK_LIMIT = 700 * 1024; // native messaging ограничивает размер сообщения
-const CONSOLE_CHANNEL = "ffmcp-console-v1"; // совпадает с console-hook*.js
-const KEEPALIVE_ALARM = "ffmcp-keepalive";
+const CONSOLE_CHANNEL = "browserskill-console-v1"; // совпадает с console-hook*.js
+const KEEPALIVE_ALARM = "browserskill-keepalive";
 
 let port = null;
 let reconnectDelay = 500;
@@ -23,7 +23,7 @@ const RING = 2000;
 const consoleLog = [];
 const networkLog = [];
 
-// Запросы MCP-клиентов на доступ, ждущие решения пользователя в popup.
+// Запросы клиентов на доступ, ждущие решения пользователя в popup.
 const pendingApprovals = new Map(); // reqId -> { reqId, client, token, ts }
 
 function refreshBadge() {
@@ -49,11 +49,11 @@ function onApprovalRequest(msg) {
   const c = msg.client || {};
   const who = c.name ? `${c.name}${c.pid ? " (pid " + c.pid + ")" : ""}` : "локальный процесс";
   chrome.notifications
-    .create("ffmcp-approval-" + msg.reqId, {
+    .create("browserskill-approval-" + msg.reqId, {
       type: "basic",
       iconUrl: chrome.runtime.getURL("icons/icon-128.png"),
-      title: "ffmcp: запрос доступа к Chrome",
-      message: `${who} хочет управлять браузером. Откройте значок ffmcp, чтобы разрешить или отклонить.`,
+      title: "browserskill: запрос доступа к Chrome",
+      message: `${who} хочет управлять браузером. Откройте значок browserskill, чтобы разрешить или отклонить.`,
     })
     .catch(() => {});
   refreshBadge();
@@ -61,7 +61,7 @@ function onApprovalRequest(msg) {
 
 function clearNotification(reqId) {
   try {
-    chrome.notifications.clear("ffmcp-approval-" + reqId).catch(() => {});
+    chrome.notifications.clear("browserskill-approval-" + reqId).catch(() => {});
   } catch (e) {}
 }
 
@@ -81,7 +81,7 @@ function decideApproval(reqId, decision, scope) {
 // Клик по нотификации открывает popup. openPopup доступен не во всех сборках,
 // поэтому промах не должен ронять обработчик.
 chrome.notifications.onClicked.addListener((id) => {
-  if (!id.startsWith("ffmcp-approval-")) return;
+  if (!id.startsWith("browserskill-approval-")) return;
   try {
     chrome.action.openPopup().catch(() => {});
   } catch (e) {}
@@ -107,7 +107,7 @@ function admit() {
         tabId: null,
         url: null,
         level: "warn",
-        text: `[ffmcp] отброшено записей консоли из-за лимита: ${intakeDropped}`,
+        text: `[browserskill] отброшено записей консоли из-за лимита: ${intakeDropped}`,
         stack: null,
       });
       intakeDropped = 0;
@@ -138,15 +138,15 @@ function recordConsole(entry, sender) {
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (!msg) return;
-  if (msg.__ffmcp === "console") {
+  if (msg.__browserskill === "console") {
     recordConsole(msg, sender);
     return;
   }
-  if (msg.__ffmcp === "console-batch" && Array.isArray(msg.items)) {
+  if (msg.__browserskill === "console-batch" && Array.isArray(msg.items)) {
     for (const item of msg.items.slice(0, 200)) recordConsole(item, sender);
     return;
   }
-  if (msg.__ffmcp === "popup") {
+  if (msg.__browserskill === "popup") {
     handlePopup(msg).then(sendResponse, (e) => sendResponse({ error: String((e && e.message) || e) }));
     return true; // ответ придёт асинхронно
   }
@@ -245,7 +245,7 @@ function browserInfo() {
 
 /* ---------- закреплённое рабочее окно ---------- */
 
-const TARGET_KEY = "ffmcpTargetWindow";
+const TARGET_KEY = "browserskillTargetWindow";
 // undefined — ещё не читали из storage, null — окно не закреплено.
 let targetWindowId;
 
@@ -362,20 +362,20 @@ async function runCode(tabId, code, { allFrames = false } = {}) {
       try {
         return (0, eval)(src);
       } catch (e) {
-        return { __ffmcpInjectError: String((e && e.stack) || e) };
+        return { __browserskillInjectError: String((e && e.stack) || e) };
       }
     },
     [code],
     { allFrames, world: "MAIN" }
   );
 
-  const blocked = (r) => r && typeof r === "object" && r.__ffmcpInjectError && CSP_BLOCKED.test(r.__ffmcpInjectError);
+  const blocked = (r) => r && typeof r === "object" && r.__browserskillInjectError && CSP_BLOCKED.test(r.__browserskillInjectError);
   const anyBlocked = allFrames ? viaMain.some(blocked) : blocked(viaMain);
   if (!anyBlocked) return unwrapInject(viaMain, allFrames);
 
   if (!userScriptsReady()) {
     throw err(
-      "страница запрещает выполнение кода своей CSP. Обход есть: открой chrome://extensions → ffmcp bridge → " +
+      "страница запрещает выполнение кода своей CSP. Обход есть: открой chrome://extensions → browserskill bridge → " +
         "включи «Разрешить пользовательские скрипты» (в Chrome до 138 — сначала режим разработчика)"
     );
   }
@@ -391,7 +391,7 @@ async function runCode(tabId, code, { allFrames = false } = {}) {
 
 function unwrapInject(res, allFrames) {
   const one = (r) => {
-    if (r && typeof r === "object" && r.__ffmcpInjectError) throw err(r.__ffmcpInjectError);
+    if (r && typeof r === "object" && r.__browserskillInjectError) throw err(r.__browserskillInjectError);
     return r;
   };
   return allFrames ? res.map(one) : one(res);
@@ -408,7 +408,7 @@ function unwrapInject(res, allFrames) {
 function wrapExpression(expression) {
   return [
     "(async () => {",
-    "  const __hooked = typeof window !== 'undefined' && window.__ffmcpPageHook;",
+    "  const __hooked = typeof window !== 'undefined' && window.__browserskillPageHook;",
     "  const __emit = (level, text) => {",
     "    try {",
     "      document.dispatchEvent(new CustomEvent(" + JSON.stringify(CONSOLE_CHANNEL) + ", {",
@@ -472,7 +472,7 @@ function pageSnapshot() {
     const cs = getComputedStyle(el);
     if (cs.visibility === "hidden" || cs.display === "none" || cs.opacity === "0") continue;
     const uid = "e" + ++i;
-    el.setAttribute("data-ffmcp-uid", uid);
+    el.setAttribute("data-browserskill-uid", uid);
     const label = (el.getAttribute("aria-label") || el.innerText || el.value || el.placeholder || el.title || el.alt || "")
       .trim()
       .slice(0, 120);
@@ -681,7 +681,7 @@ const OPS = {
       await resolveTabId(tabId),
       async (uid, selector, deadlineMs) => {
         const locate = () =>
-          uid ? document.querySelector('[data-ffmcp-uid="' + uid + '"]') : document.querySelector(selector);
+          uid ? document.querySelector('[data-browserskill-uid="' + uid + '"]') : document.querySelector(selector);
         const deadline = Date.now() + deadlineMs;
         let el = locate();
         while (!el && Date.now() < deadline) {
@@ -701,7 +701,7 @@ const OPS = {
     return await runFunc(
       await resolveTabId(tabId),
       (uid, selector, value, submit) => {
-        const el = uid ? document.querySelector('[data-ffmcp-uid="' + uid + '"]') : document.querySelector(selector);
+        const el = uid ? document.querySelector('[data-browserskill-uid="' + uid + '"]') : document.querySelector(selector);
         if (!el) throw new Error("элемент не найден");
         el.focus();
         const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
@@ -721,7 +721,7 @@ const OPS = {
       await resolveTabId(tabId),
       (uid, selector, key) => {
         const el = uid
-          ? document.querySelector('[data-ffmcp-uid="' + uid + '"]')
+          ? document.querySelector('[data-browserskill-uid="' + uid + '"]')
           : selector
             ? document.querySelector(selector)
             : document.activeElement;
@@ -1071,7 +1071,7 @@ function connect() {
   try {
     port = chrome.runtime.connectNative(HOST_NAME);
   } catch (e) {
-    console.error("[ffmcp] connectNative провалился:", e);
+    console.error("[browserskill] connectNative провалился:", e);
     scheduleReconnect();
     return;
   }
@@ -1085,7 +1085,7 @@ function connect() {
 
   port.onDisconnect.addListener(() => {
     const e = chrome.runtime.lastError;
-    console.warn("[ffmcp] хост отключился:", e && e.message);
+    console.warn("[browserskill] хост отключился:", e && e.message);
     port = null;
     // Хост ушёл — решать по висящим запросам больше некому.
     for (const id of pendingApprovals.keys()) clearNotification(id);
@@ -1096,7 +1096,7 @@ function connect() {
   connectedAt = Date.now();
   port.postMessage({ type: "hello", extension: chrome.runtime.id, version: chrome.runtime.getManifest().version });
   refreshBadge();
-  console.log("[ffmcp] подключён к native-хосту");
+  console.log("[browserskill] подключён к native-хосту");
 }
 
 function scheduleReconnect() {

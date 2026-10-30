@@ -1,18 +1,17 @@
 #!/usr/bin/env node
-/* ffmcp — единая точка входа CLI.
+/* browserskill — единая точка входа CLI.
  *
- *   ffmcp mcp                    запустить MCP-сервер по stdio (для агентов)
- *   ffmcp doctor                 диагностика установки
- *   ffmcp browsers               какие браузеры подключены к мосту
- *   ffmcp status                 состояние связи с браузером
- *   ffmcp tabs                   список вкладок
- *   ffmcp open <url>             открыть вкладку
- *   ffmcp eval <js> [tabId]      выполнить JS в странице
- *   ffmcp call <op> [json]       произвольная операция моста
- *   ffmcp api <path> [argsJson]  прямой вызов WebExtension API
+ *   browserskill doctor                 диагностика установки
+ *   browserskill browsers               какие браузеры подключены к мосту
+ *   browserskill status                 состояние связи с браузером
+ *   browserskill tabs                   список вкладок
+ *   browserskill open <url>             открыть вкладку
+ *   browserskill eval <js> [tabId]      выполнить JS в странице
+ *   browserskill call <op> [json]       произвольная операция моста
+ *   browserskill api <path> [argsJson]  прямой вызов WebExtension API
  *
  * Браузер выбирается флагом --browser=chrome (или -b chrome), переменной
- * FFMCP_BROWSER, иначе автоматически — по тому, чей сокет живой.
+ * BROWSERSKILL_BROWSER, иначе автоматически — по тому, чей сокет живой.
  */
 
 "use strict";
@@ -23,11 +22,11 @@ const path = require("node:path");
 const os = require("node:os");
 const crypto = require("node:crypto");
 
-const STATE_DIR = process.env.FFMCP_DIR || path.join(os.homedir(), ".ffmcp");
+const STATE_DIR = process.env.BROWSERSKILL_DIR || path.join(os.homedir(), ".browserskill");
 const BROWSERS = ["firefox", "chrome"];
 const socketPath = (browser) => path.join(STATE_DIR, `${browser}.sock`);
 
-// Тот же токен установки, что использует MCP-сервер: одобрив клиента «навсегда»
+// Стабильный токен установки: одобрив клиента «навсегда»
 // однажды, пользователь покрывает и CLI, и агента.
 function clientToken() {
   const p = path.join(STATE_DIR, "client-token");
@@ -45,38 +44,37 @@ function clientToken() {
 const TOKEN = clientToken();
 
 const HOST_MANIFESTS = {
-  firefox: [path.join(os.homedir(), "Library/Application Support/Mozilla/NativeMessagingHosts/ffmcp.json")],
+  firefox: [path.join(os.homedir(), "Library/Application Support/Mozilla/NativeMessagingHosts/browserskill.json")],
   chrome: [
-    path.join(os.homedir(), "Library/Application Support/Google/Chrome/NativeMessagingHosts/ffmcp.json"),
-    path.join(os.homedir(), "Library/Application Support/Chromium/NativeMessagingHosts/ffmcp.json"),
-    path.join(os.homedir(), "Library/Application Support/BraveSoftware/Brave-Browser/NativeMessagingHosts/ffmcp.json"),
-    path.join(os.homedir(), "Library/Application Support/Microsoft Edge/NativeMessagingHosts/ffmcp.json"),
-    path.join(os.homedir(), "Library/Application Support/Arc/User Data/NativeMessagingHosts/ffmcp.json"),
+    path.join(os.homedir(), "Library/Application Support/Google/Chrome/NativeMessagingHosts/browserskill.json"),
+    path.join(os.homedir(), "Library/Application Support/Chromium/NativeMessagingHosts/browserskill.json"),
+    path.join(os.homedir(), "Library/Application Support/BraveSoftware/Brave-Browser/NativeMessagingHosts/browserskill.json"),
+    path.join(os.homedir(), "Library/Application Support/Microsoft Edge/NativeMessagingHosts/browserskill.json"),
+    path.join(os.homedir(), "Library/Application Support/Arc/User Data/NativeMessagingHosts/browserskill.json"),
   ],
 };
 
-const USAGE = `ffmcp — мост между MCP-агентами и браузером (Firefox, Chrome)
+const USAGE = `browserskill — управление браузером (Firefox, Chrome) из командной строки
 
-  ffmcp mcp                    запустить MCP-сервер по stdio (для агентов)
-  ffmcp doctor                 диагностика установки
-  ffmcp browsers               какие браузеры подключены к мосту
-  ffmcp status                 состояние связи с браузером
-  ffmcp windows                список окон (target — закреплённое)
-  ffmcp use-window <id|release> закрепить рабочее окно или снять закрепление
-  ffmcp new-window [url]       новое окно, сразу закреплённое
-  ffmcp tabs [queryJson]       список вкладок
-  ffmcp open <url>             открыть вкладку
-  ffmcp snapshot [tabId]       интерактивные элементы страницы
-  ffmcp read [tabId]           видимый текст страницы
-  ffmcp eval <js> [tabId]      выполнить JS в странице
-  ffmcp api <path> [argsJson]  прямой вызов WebExtension API
-  ffmcp call <op> [paramsJson] произвольная операция моста
+  browserskill doctor                 диагностика установки
+  browserskill browsers               какие браузеры подключены к мосту
+  browserskill status                 состояние связи с браузером
+  browserskill windows                список окон (target — закреплённое)
+  browserskill use-window <id|release> закрепить рабочее окно или снять закрепление
+  browserskill new-window [url]       новое окно, сразу закреплённое
+  browserskill tabs [queryJson]       список вкладок
+  browserskill open <url>             открыть вкладку
+  browserskill snapshot [tabId]       интерактивные элементы страницы
+  browserskill read [tabId]           видимый текст страницы
+  browserskill eval <js> [tabId]      выполнить JS в странице
+  browserskill api <path> [argsJson]  прямой вызов WebExtension API
+  browserskill call <op> [paramsJson] произвольная операция моста
 
-Выбор браузера: --browser=chrome | -b chrome | FFMCP_BROWSER=chrome`;
+Выбор браузера: --browser=chrome | -b chrome | BROWSERSKILL_BROWSER=chrome`;
 
 // Вырезает --browser/-b из argv, чтобы команды видели только свои аргументы.
 function extractBrowser(argv) {
-  let name = process.env.FFMCP_BROWSER || null;
+  let name = process.env.BROWSERSKILL_BROWSER || null;
   const rest = [];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -112,7 +110,7 @@ function callHost(browser, op, params = {}, timeoutMs = 45000) {
       const other = live().filter((b) => b !== browser);
       reject(
         new Error(
-          `сокет не найден: ${sockPath}\nЗапусти ${browser} с установленным расширением ffmcp.` +
+          `сокет не найден: ${sockPath}\nЗапусти ${browser} с установленным расширением browserskill.` +
             (other.length ? `\nСейчас доступен: ${other.join(", ")} (--browser=${other[0]}).` : "")
         )
       );
@@ -146,7 +144,7 @@ function callHost(browser, op, params = {}, timeoutMs = 45000) {
         // Хост ждёт, пока пользователь подтвердит доступ в popup расширения.
         if (msg.pending) {
           arm(190000, "таймаут ожидания подтверждения доступа пользователем");
-          console.error(`⏳ жду подтверждения доступа в ${browser} (значок ffmcp)…`);
+          console.error(`⏳ жду подтверждения доступа в ${browser} (значок browserskill)…`);
           continue;
         }
         clearTimeout(timer);
@@ -245,7 +243,7 @@ async function doctor(explicit) {
     console.log(`${c.pass ? "✅" : "❌"}  ${c.name}${c.hint ? " — " + c.hint : ""}`);
   }
   for (const n of notes) console.log(n);
-  if (!anyBrowserOk) console.log("❌  Ни один браузер не отвечает — запусти его и загрузи расширение ffmcp");
+  if (!anyBrowserOk) console.log("❌  Ни один браузер не отвечает — запусти его и загрузи расширение browserskill");
   process.exit(checks.every((c) => c.pass) && anyBrowserOk ? 0 : 1);
 }
 
@@ -257,11 +255,8 @@ async function main() {
   const host = (op, params, timeoutMs) => callHost(target, op, params, timeoutMs);
 
   switch (cmd) {
-    case "mcp":
-      require(path.join(__dirname, "ffmcp-mcp.js"));
-      return;
     case "host":
-      require(path.join(__dirname, "ffmcp-host.js"));
+      require(path.join(__dirname, "browserskill-host.js"));
       return;
     case "doctor":
       return doctor(explicit);

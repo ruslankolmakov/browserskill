@@ -7,9 +7,9 @@ const fs = require("node:fs");
 const path = require("node:path");
 const net = require("node:net");
 
-const DIR = path.join(os.tmpdir(), "ffmcp-approval-" + process.pid);
+const DIR = path.join(os.tmpdir(), "browserskill-approval-" + process.pid);
 fs.mkdirSync(DIR, { recursive: true });
-const env = { ...process.env, FFMCP_DIR: DIR, FFMCP_APPROVAL_TIMEOUT_MS: "1000" };
+const env = { ...process.env, BROWSERSKILL_DIR: DIR, BROWSERSKILL_APPROVAL_TIMEOUT_MS: "1000" };
 const ROOT = path.join(__dirname, "..");
 const SOCK = path.join(DIR, "firefox.sock");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -19,7 +19,7 @@ let failN = 0;
 const pass = (m) => { okN++; console.log("✅ " + m); };
 const fail = (m) => { failN++; process.exitCode = 1; console.log("❌ " + m); };
 
-const host = spawn("node", [ROOT + "/bin/ffmcp-host.js"], { env, stdio: ["pipe", "pipe", "inherit"] });
+const host = spawn("node", [ROOT + "/bin/browserskill-host.js"], { env, stdio: ["pipe", "pipe", "inherit"] });
 
 function sendNative(msg) {
   const b = Buffer.from(JSON.stringify(msg));
@@ -81,7 +81,7 @@ function clientCall(token, op = "tabs.list") {
   });
 }
 
-setTimeout(() => sendNative({ type: "hello", extension: "ffmcp@local", version: "1.0.0" }), 200);
+setTimeout(() => sendNative({ type: "hello", extension: "browserskill@local", version: "1.0.0" }), 200);
 
 (async () => {
   await sleep(400);

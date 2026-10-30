@@ -9,7 +9,7 @@ let nativeMessages = [];
 
 const browser = {
   runtime: {
-    id: "ffmcp@local",
+    id: "browserskill@local",
     onMessage: ev("message"),
     getManifest: () => ({ version: "1.0.0" }),
     getBrowserInfo: async () => ({ name: "Firefox", version: "153.0" }),

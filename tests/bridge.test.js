@@ -1,17 +1,18 @@
-// E2E: фейковое "расширение" вместо Firefox + настоящий MCP-сервер.
-const { spawn } = require("node:child_process");
+// E2E: фейковое "расширение" вместо Firefox + настоящий CLI.
+const { spawn, execFile } = require("node:child_process");
 const os = require("node:os");
 const fs = require("node:fs");
 const path = require("node:path");
 
-const DIR = path.join(os.tmpdir(), "ffmcp-e2e-" + process.pid);
+const DIR = path.join(os.tmpdir(), "browserskill-e2e-" + process.pid);
 fs.mkdirSync(DIR, { recursive: true });
-// Этот тест проверяет транспорт MCP → сокет → хост → расширение; гейт
+// Этот тест проверяет транспорт CLI → сокет → хост → расширение; гейт
 // подтверждения выключаем, ему посвящён отдельный approval.test.js.
-const env = { ...process.env, FFMCP_DIR: DIR, FFMCP_APPROVAL: "0" };
-const ROOT = require("node:path").join(__dirname, "..");
+const env = { ...process.env, BROWSERSKILL_DIR: DIR, BROWSERSKILL_APPROVAL: "0" };
+const ROOT = path.join(__dirname, "..");
+const CLI = ROOT + "/bin/browserskill.js";
 
-const host = spawn("node", [ROOT + "/bin/ffmcp-host.js"], { env, stdio: ["pipe", "pipe", "inherit"] });
+const host = spawn("node", [ROOT + "/bin/browserskill-host.js"], { env, stdio: ["pipe", "pipe", "inherit"] });
 
 function sendNative(msg) {
   const b = Buffer.from(JSON.stringify(msg));
@@ -48,83 +49,54 @@ host.stdout.on("data", (d) => {
   }
 });
 
-setTimeout(() => sendNative({ type: "hello", extension: "ffmcp@local", version: "1.0.0" }), 300);
+setTimeout(() => sendNative({ type: "hello", extension: "browserskill@local", version: "1.0.0" }), 300);
 
-// --- MCP-клиент ---
+// Запуск CLI как отдельного процесса — ровно так его зовёт агент.
+const cli = (...args) =>
+  new Promise((resolve) =>
+    execFile("node", [CLI, ...args], { env, maxBuffer: 16 * 1024 * 1024 }, (err, stdout, stderr) =>
+      resolve({ code: err ? err.code : 0, stdout, stderr })
+    )
+  );
+const json = (r) => JSON.parse(r.stdout);
+
 setTimeout(async () => {
-  const mcp = spawn("node", [ROOT + "/bin/ffmcp-mcp.js"], { env, stdio: ["pipe", "pipe", "inherit"] });
-  let buf = "";
-  const pending = new Map();
-  mcp.stdout.on("data", (d) => {
-    buf += d;
-    let i;
-    while ((i = buf.indexOf("\n")) !== -1) {
-      const line = buf.slice(0, i); buf = buf.slice(i + 1);
-      if (!line.trim()) continue;
-      const m = JSON.parse(line);
-      const r = pending.get(m.id); if (r) { pending.delete(m.id); r(m); }
-    }
-  });
-  let id = 0;
-  const rpc = (method, params) => new Promise((res) => {
-    const myId = ++id; pending.set(myId, res);
-    mcp.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: myId, method, params }) + "\n");
-  });
-
   const fail = (msg) => { console.log("❌ " + msg); process.exitCode = 1; };
   const pass = (msg) => console.log("✅ " + msg);
 
-  const init = await rpc("initialize", { protocolVersion: "2024-11-05", capabilities: {} });
-  init.result?.serverInfo?.name === "ffmcp" ? pass("initialize") : fail("initialize: " + JSON.stringify(init));
+  const usage = await cli();
+  usage.code === 0 && /browserskill/.test(usage.stdout) && !/mcp/i.test(usage.stdout)
+    ? pass("usage без MCP") : fail("usage: " + usage.stdout.slice(0, 200));
 
-  const list = await rpc("tools/list", {});
-  const tools = list.result.tools;
-  tools.length > 30 ? pass(`tools/list: ${tools.length} инструментов`) : fail("мало инструментов");
-  const bad = tools.filter((t) => !t.name || !t.description || t.inputSchema?.type !== "object");
-  bad.length === 0 ? pass("схемы инструментов валидны") : fail("битые схемы: " + bad.map((t) => t.name).join(","));
+  const st = await cli("status");
+  st.code === 0 && json(st).browser.version === "141.0"
+    ? pass("status прошёл через хост в расширение") : fail("status: " + JSON.stringify(st));
 
-  const st = await rpc("tools/call", { name: "browser_status", arguments: {} });
-  JSON.parse(st.result.content[0].text).browser.version === "141.0"
-    ? pass("tools/call browser_status прошёл через хост в расширение") : fail("status: " + JSON.stringify(st));
-
-  const ev = await rpc("tools/call", { name: "browser_eval", arguments: { expression: "return 1", tabId: 7 } });
-  const evv = JSON.parse(ev.result.content[0].text);
+  const ev = await cli("eval", "return 1", "7");
+  const evv = json(ev);
   evv.params.tabId === 7 && evv.echoed === "page.eval" ? pass("аргументы доходят до расширения") : fail("eval: " + JSON.stringify(evv));
 
-  const err = await rpc("tools/call", { name: "browser_click", arguments: { uid: "e1" } });
-  err.result.isError && /элемент не найден/.test(err.result.content[0].text)
-    ? pass("ошибки расширения возвращаются как isError") : fail("ошибка: " + JSON.stringify(err.result));
+  const call = await cli("call", "page.click", '{"uid":"e2"}');
+  json(call).echoed === "page.click" ? pass("call <op> <json> передаёт произвольную операцию") : fail("call: " + call.stdout);
 
-  const unknown = await rpc("tools/call", { name: "нет_такого", arguments: {} });
-  unknown.result.isError ? pass("неизвестный инструмент обработан") : fail("неизвестный инструмент");
+  const api = await cli("api", "tabs.query", '[{"pinned":true}]');
+  const apiv = json(api);
+  apiv.echoed === "browser.call" && apiv.params.path === "tabs.query" && apiv.params.args[0].pinned === true
+    ? pass("api <path> <args> уходит в browser.call") : fail("api: " + api.stdout);
 
-  // Имена из версии «только Firefox» не сломались, хотя в списке их больше нет.
-  const legacy = await rpc("tools/call", { name: "firefox_status", arguments: {} });
-  !legacy.result.isError && JSON.parse(legacy.result.content[0].text).browser.version === "141.0"
-    ? pass("старое имя firefox_status ещё работает") : fail("legacy: " + JSON.stringify(legacy.result));
-  tools.some((t) => t.name === "browser_list") && !tools.some((t) => t.name.startsWith("firefox_"))
-    ? pass("в списке только нейтральные browser_*") : fail("в tools/list остались firefox_*");
+  const err = await cli("call", "page.click", '{"uid":"e1"}');
+  err.code !== 0 && /элемент не найден/.test(err.stderr)
+    ? pass("ошибки расширения — ненулевой код и текст в stderr") : fail("ошибка: " + JSON.stringify(err));
 
-  // Чанкование напрямую через сокет
-  const net = require("node:net");
-  const s = net.createConnection(path.join(DIR, "firefox.sock"));
-  let sb = "";
-  s.on("connect", () => s.write(JSON.stringify({ id: 99, op: "big", params: {} }) + "\n"));
-  s.on("data", (d) => {
-    sb += d;
-    if (sb.includes("\n")) {
-      const m = JSON.parse(sb.slice(0, sb.indexOf("\n")));
-      m.ok && m.value.blob.length === 2_000_000 ? pass("сборка чанков (2 МБ)") : fail("чанки: " + JSON.stringify(m).slice(0, 200));
-      s.end();
-      const parallel = rpc("ping", {});
-      parallel.then((p) => {
-        p.result ? pass("ping") : fail("ping");
-        mcp.kill(); host.kill();
-        setTimeout(() => {
-          fs.existsSync(path.join(DIR, "firefox.sock")) ? fail("сокет не убран после выхода") : pass("сокет очищен при завершении");
-          fs.rmSync(DIR, { recursive: true, force: true });
-        }, 400);
-      });
-    }
-  });
+  const unknown = await cli("нет_такой");
+  unknown.code !== 0 && /Неизвестная команда/.test(unknown.stderr) ? pass("неизвестная команда обработана") : fail("неизвестная команда");
+
+  const big = await cli("call", "big");
+  json(big).blob.length === 2_000_000 ? pass("сборка чанков (2 МБ)") : fail("чанки: " + big.stdout.slice(0, 200));
+
+  host.kill();
+  setTimeout(() => {
+    fs.existsSync(path.join(DIR, "firefox.sock")) ? fail("сокет не убран после выхода") : pass("сокет очищен при завершении");
+    fs.rmSync(DIR, { recursive: true, force: true });
+  }, 400);
 }, 800);

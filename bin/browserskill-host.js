@@ -1,12 +1,12 @@
 #!/usr/bin/env node
-/* ffmcp native messaging host.
+/* browserskill native messaging host.
  *
  * Запускается самим браузером (Firefox или Chrome). С одной стороны — native
  * messaging по stdio (4 байта длины little-endian + JSON), с другой —
- * Unix-сокет, к которому подключаются MCP-серверы. Никаких TCP-портов и HTTP.
+ * Unix-сокет, к которому подключаются CLI-клиенты (агенты). Никаких TCP-портов и HTTP.
  *
- * У каждого браузера свой экземпляр хоста и свой сокет: ~/.ffmcp/firefox.sock,
- * ~/.ffmcp/chrome.sock. Браузер задаётся флагом --browser= из лаунчера, который
+ * У каждого браузера свой экземпляр хоста и свой сокет: ~/.browserskill/firefox.sock,
+ * ~/.browserskill/chrome.sock. Браузер задаётся флагом --browser= из лаунчера, который
  * генерирует install.sh.
  */
 
@@ -32,7 +32,7 @@ function detectBrowser(argv) {
 
 const BROWSER = detectBrowser(process.argv.slice(2));
 
-const STATE_DIR = process.env.FFMCP_DIR || path.join(os.homedir(), ".ffmcp");
+const STATE_DIR = process.env.BROWSERSKILL_DIR || path.join(os.homedir(), ".browserskill");
 const SOCKET_PATH = path.join(STATE_DIR, `${BROWSER}.sock`);
 const OWNER_PATH = path.join(STATE_DIR, `${BROWSER}.pid`);
 const LOG_PATH = path.join(STATE_DIR, `${BROWSER}.log`);
@@ -40,13 +40,13 @@ const LOG_PATH = path.join(STATE_DIR, `${BROWSER}.log`);
 // пользователь не разрешает ему заодно и Chrome.
 const ALLOW_PATH = path.join(STATE_DIR, `allowed-${BROWSER}.json`);
 
-// Каждое подключение MCP-клиента к сокету пользователь подтверждает вручную
+// Каждое подключение клиента к сокету пользователь подтверждает вручную
 // (нотификация → popup расширения). Здоровьесберегающие операции (__status,
-// ping) не гейтятся. FFMCP_APPROVAL=0 полностью отключает гейт (headless/CI).
-const APPROVAL_ON = process.env.FFMCP_APPROVAL !== "0";
+// ping) не гейтятся. BROWSERSKILL_APPROVAL=0 полностью отключает гейт (headless/CI).
+const APPROVAL_ON = process.env.BROWSERSKILL_APPROVAL !== "0";
 // Две минуты, а не одна: значок расширения бывает спрятан в меню «Расширения»,
 // и минуты на то, чтобы его найти и нажать кнопку, человеку не хватает.
-const APPROVAL_TIMEOUT_MS = Number(process.env.FFMCP_APPROVAL_TIMEOUT_MS) || 120000;
+const APPROVAL_TIMEOUT_MS = Number(process.env.BROWSERSKILL_APPROVAL_TIMEOUT_MS) || 120000;
 const EXEMPT_OPS = new Set(["ping"]); // __status обрабатывается ещё раньше
 
 fs.mkdirSync(STATE_DIR, { recursive: true, mode: 0o700 });
@@ -188,7 +188,7 @@ function callExtension(op, params, timeoutMs) {
   });
 }
 
-/* ---------- Unix-сокет для MCP-серверов ---------- */
+/* ---------- Unix-сокет для клиентов ---------- */
 
 try {
   if (fs.existsSync(SOCKET_PATH)) fs.unlinkSync(SOCKET_PATH);
@@ -273,7 +273,7 @@ async function handleClientRequest(conn, req) {
       });
     });
     if (!waited) {
-      reply({ ok: false, error: `расширение ffmcp не подключено к хосту (${BROWSER})` });
+      reply({ ok: false, error: `расширение browserskill не подключено к хосту (${BROWSER})` });
       return;
     }
   }

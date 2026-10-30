@@ -1,6 +1,6 @@
 (async () => {
   const bg = await browser.runtime.getBackgroundPage();
-  const s = bg.__ffmcp;
+  const s = bg.__browserskill;
   const st = document.getElementById("status");
   const connected = s.connected();
   st.textContent = connected ? "подключён" : "нет связи";

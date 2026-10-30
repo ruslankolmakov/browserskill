@@ -1,24 +1,25 @@
-# ffmcp
+# browserskill
 
-Расширения для Firefox и Chrome + MCP-сервер, дающие агентам полный доступ к твоим настоящим
-браузерам. Транспорт целиком локальный: **stdio и Unix-сокет, ни одного HTTP-запроса
+Расширения для Firefox и Chrome + CLI + скилл для Claude Code, дающие агентам полный доступ
+к твоим настоящим браузерам. Никакого MCP-сервера: агент вызывает CLI как обычную команду,
+а как ей пользоваться — описано в скилле. Транспорт целиком локальный: **stdio и Unix-сокет, ни одного HTTP-запроса
 и ни одного открытого порта**.
 
 ## Как устроено
 
 ```
-                                 ┌─ Unix-сокет ~/.ffmcp/firefox.sock ─▶ ffmcp-host.js ─▶ расширение Firefox
-MCP-агент ──stdio JSON-RPC──▶ ffmcp-mcp.js
-                                 └─ Unix-сокет ~/.ffmcp/chrome.sock ──▶ ffmcp-host.js ─▶ расширение Chrome
+                                ┌─ Unix-сокет ~/.browserskill/firefox.sock ─▶ browserskill-host.js ─▶ расширение Firefox
+агент ──скилл──▶ browserskill.js
+                                └─ Unix-сокет ~/.browserskill/chrome.sock ──▶ browserskill-host.js ─▶ расширение Chrome
 ```
 
 У каждого браузера свой native-хост и свой сокет (права `0600`). Хост поднимается самим
-браузером при старте расширения и работает как брокер: к нему подключаются MCP-серверы.
+браузером при старте расширения и работает как брокер: к нему подключаются вызовы CLI.
 Поэтому **несколько агентов одновременно** работают с одним браузером, а внешне не открыт
 ни один сетевой порт.
 
-Один MCP-сервер обслуживает оба браузера сразу — какой именно использовать, агент решает
-вызовом `browser_use` либо аргументом `browser` у любого инструмента.
+Один CLI обслуживает оба браузера — какой использовать, задаёт флаг `-b chrome|firefox`
+или переменная `BROWSERSKILL_BROWSER`; без них берётся единственный запущенный.
 
 Ответы больше ~700 КБ (скриншоты, дампы DOM) автоматически режутся на чанки и собираются
 обратно в хосте — ограничение native messaging на размер сообщения обходится прозрачно.
@@ -26,13 +27,14 @@ MCP-агент ──stdio JSON-RPC──▶ ffmcp-mcp.js
 ## Установка
 
 ```bash
-cd ~/Projects/ffmcp
+cd ~/Projects/browserskill
 ./install.sh
 ```
 
 Скрипт кладёт манифесты native-хоста в каталоги Firefox и всех найденных браузеров на
-Chromium и создаёт лаунчеры с абсолютным путём к `node` (браузер из Finder не видит
-`/opt/homebrew/bin`).
+Chromium, создаёт лаунчеры с абсолютным путём к `node` (браузер из Finder не видит
+`/opt/homebrew/bin`) и ставит скилл в `~/.claude/skills/browserskill` (другой каталог —
+переменная `CLAUDE_SKILLS_DIR`).
 
 Затем ставим расширения — нужно хотя бы одно.
 
@@ -55,83 +57,70 @@ Chromium и создаёт лаунчеры с абсолютным путём �
    в манифесте, и именно его разрешает манифест native-хоста
 4. Желательно: в карточке расширения включить **Разрешить пользовательские скрипты**
 
-Последний пункт нужен для `browser_eval` на сайтах со строгим CSP — подробности ниже.
+Последний пункт нужен для `eval` на сайтах со строгим CSP — подробности ниже.
 Распакованное расширение переживает перезапуск Chrome, но требует включённого режима
 разработчика.
 
 Проверка обоих браузеров сразу:
 
 ```bash
-./bin/ffmcp.js doctor
-./bin/ffmcp.js browsers
+./bin/browserskill.js doctor
+./bin/browserskill.js browsers
 ```
 
 ## Подключение к агентам
 
-Claude Code:
+Отдельной настройки нет: `install.sh` кладёт `SKILL.md` в `~/.claude/skills/browserskill`,
+и Claude Code подхватывает скилл сам. Скилл описывает, как звать CLI, какие операции есть
+и на какие грабли не наступать. Источник — `skill/SKILL.md` в репозитории, в него при
+установке подставляется путь к репозиторию.
+
+Любому другому агенту достаточно уметь запускать команду:
 
 ```bash
-claude mcp add browser -- node ~/Projects/ffmcp/bin/ffmcp-mcp.js
+node /путь/к/browserskill/bin/browserskill.js <команда>
 ```
-
-Любой другой MCP-клиент (`mcp.json`, Cursor, Zed):
-
-```json
-{
-  "mcpServers": {
-    "browser": {
-      "command": "node",
-      "args": ["/абсолютный/путь/к/ffmcp/bin/ffmcp-mcp.js"]
-    }
-  }
-}
-```
-
-Если хочется жёстко привязать сервер к одному браузеру — добавь `--browser firefox`
-или `--browser chrome` (то же самое делает переменная `FFMCP_BROWSER`). Тогда
-`browser_use` не понадобится, а вызовы в другой браузер уходить не будут.
 
 ## Выбор браузера
 
-```
-browser_list                      # кто доступен и кто выбран сейчас
-browser_use {"browser": "chrome"} # закрепить Chrome для всех следующих вызовов
-browser_use {}                    # показать текущий выбор
-browser_use {"release": true}     # вернуться к автоопределению
-browser_tabs {"browser": "firefox"}  # разовый вызов мимо закрепления
+```bash
+browserskill browsers                  # кто доступен
+browserskill -b chrome tabs            # разовый вызов в Chrome
+BROWSERSKILL_BROWSER=chrome browserskill status
 ```
 
-Без закрепления браузер выбирается сам: единственный запущенный, иначе последний
-удачно использованный, иначе Firefox. Аргумент `browser` у конкретного вызова всегда
-сильнее закрепления.
+Без флага браузер выбирается сам: единственный запущенный, при двух живых — Firefox.
+Флаг всегда сильнее переменной окружения. Состояния «закреплённый браузер» между вызовами
+нет — в отличие от рабочего окна, которое живёт в расширении.
 
-## Инструменты
+## Команды и операции
 
-39 инструментов. Основные:
+Короткие подкоманды (`browserskill --help`): `doctor`, `browsers`, `status`, `windows`,
+`use-window`, `new-window`, `tabs`, `open`, `snapshot`, `read`, `eval`, `api`, `call`.
 
-| Группа | Инструменты |
+Всё остальное — через `call <op> '<json>'`, это ~40 операций моста:
+
+| Группа | Операции |
 |---|---|
-| Браузер | `browser_list`, `browser_use`, `browser_status` |
-| Рабочее окно | `browser_use_window`, `browser_new_window` |
-| Вкладки и окна | `browser_tabs`, `browser_open`, `browser_navigate`, `browser_close_tab`, `browser_activate_tab`, `browser_reload`, `browser_back`, `browser_forward`, `browser_windows` |
-| Страница | `browser_snapshot`, `browser_read`, `browser_html`, `browser_eval`, `browser_click`, `browser_fill`, `browser_press`, `browser_wait_for`, `browser_screenshot` |
-| Отладка | `browser_console`, `browser_network` |
-| Профиль | `browser_cookies`, `browser_cookie_set`, `browser_cookie_remove`, `browser_history`, `browser_bookmarks`, `browser_downloads`, `browser_storage`, `browser_containers`, `browser_recent_closed` |
-| Всё остальное | `browser_api`, `browser_api_describe` |
+| Рабочее окно | `session.newWindow`, `session.useWindow`, `session.target`, `windows.list/open/close` |
+| Вкладки | `tabs.list`, `tabs.get`, `tabs.open`, `tabs.navigate`, `tabs.close`, `tabs.activate`, `tabs.reload`, `tabs.back`, `tabs.forward`, `tabs.waitLoad` |
+| Страница | `page.snapshot`, `page.text`, `page.html`, `page.eval`, `page.click`, `page.fill`, `page.press`, `page.waitFor`, `page.find`, `page.screenshot` |
+| Отладка | `logs.console`, `logs.network` |
+| Профиль | `cookies.list/set/remove`, `history.search/delete`, `bookmarks.search/tree/create/remove`, `downloads.list/start`, `storage.get`, `containers.list`, `sessions.recent/restore` |
+| Всё остальное | `browser.call`, `browser.describe` |
 
-Старые имена вида `firefox_tabs` продолжают работать (и заодно задают браузер), но в
-списке инструментов их больше нет.
+Полный справочник с примерами вызовов — в `skill/SKILL.md`.
 
-**`browser_api` — это и есть «полный доступ».** Он вызывает любой метод WebExtension API
+**`api` — это и есть «полный доступ».** Он вызывает любой метод WebExtension API
 напрямую, так что агент не ограничен готовым списком:
 
-```json
-{ "path": "tabs.query", "args": [{ "audible": true }] }
-{ "path": "browsingData.removeCache", "args": [{}] }
-{ "path": "proxy.settings.set", "args": [{ "value": { "proxyType": "none" } }] }
+```bash
+browserskill api tabs.query '[{"audible":true}]'
+browserskill api browsingData.removeCache '[{}]'
+browserskill api proxy.settings.set '[{"value":{"proxyType":"none"}}]'
 ```
 
-`browser_api_describe` показывает, что вообще доступно (`{"path": "cookies"}` → список
+`call browser.describe` показывает, что вообще доступно (`{"path": "cookies"}` → список
 методов). Наборы API у Firefox и Chrome разные, так что спрашивать стоит у того браузера,
 в котором собираешься работать.
 
@@ -140,35 +129,35 @@ browser_tabs {"browser": "firefox"}  # разовый вызов мимо зак
 По умолчанию операции без явного `tabId` идут в активную вкладку текущего окна — то есть
 туда, где сейчас работаешь ты. Чтобы агент не мешал, закрепи за ним окно:
 
-```
-browser_new_window {"url": "https://example.com"}   # своё окно, сразу закреплено
-browser_use_window {"windowId": 3}                  # закрепить существующее
-browser_use_window {}                               # показать текущее закрепление
-browser_use_window {"release": true}                # снять
+```bash
+browserskill new-window https://example.com   # своё окно, сразу закреплено
+browserskill use-window 3                     # закрепить существующее
+browserskill call session.useWindow '{}'      # показать текущее закрепление
+browserskill use-window release               # снять
 ```
 
 После закрепления в это окно уходят все операции без `tabId`, туда же открываются новые
-вкладки, а `browser_tabs` показывает только его вкладки (`allWindows: true` — все).
-В `browser_windows` закреплённое окно помечено `target: true`, а в попапе расширения видно
+вкладки, а `tabs` показывает только его вкладки (`call tabs.list '{"allWindows":true}'` — все).
+В `windows` закреплённое окно помечено `target: true`, а в попапе расширения видно
 строкой «Рабочее окно». Закрепление живёт отдельно в каждом браузере и снимается само,
-если окно закрыть. Из CLI — `ffmcp use-window <id>` и `ffmcp new-window [url]`.
+если окно закрыть.
 
-<img src="docs/popup.png" alt="popup ffmcp: состояние моста" width="300" />
+<img src="docs/popup.png" alt="popup browserskill: состояние моста" width="300" />
 
 ### Работа со страницей
 
-`browser_snapshot` возвращает интерактивные элементы с короткими `uid` — это дешевле
+`snapshot` возвращает интерактивные элементы с короткими `uid` — это дешевле
 скриншота и точнее селекторов:
 
 ```json
 { "uid": "e12", "tag": "input", "type": "email", "text": "Email address", "rect": {...} }
 ```
 
-Далее `browser_fill {uid: "e12", value: "..."}` и `browser_click {uid: "e15"}`.
-`browser_fill` выставляет значение через нативный сеттер прототипа и шлёт `input`/`change`,
+Далее `call page.fill '{"uid":"e12","value":"..."}'` и `call page.click '{"uid":"e15"}'`.
+`page.fill` выставляет значение через нативный сеттер прототипа и шлёт `input`/`change`,
 поэтому корректно работает с React, Vue и Svelte.
 
-`browser_eval` выполняет код в контексте страницы — это тело async-функции, доступны
+`eval` выполняет код в контексте страницы — это тело async-функции, доступны
 `await` и `return`:
 
 ```js
@@ -177,7 +166,7 @@ return [...document.querySelectorAll("h2")].map(h => h.innerText)
 
 Логи консоли и необработанные исключения собираются автоматически на каждой загруженной
 странице (буфер на 2000 записей), сетевые запросы — через `webRequest`. Читать через
-`browser_console` и `browser_network`. Вывод `console.*` из самого `browser_eval` тоже
+`call logs.console` и `call logs.network`. Вывод `console.*` из самого `eval` тоже
 попадает в буфер.
 
 ## Чем Chrome отличается от Firefox
@@ -191,47 +180,45 @@ return [...document.querySelectorAll("h2")].map(h => h.innerText)
 | Произвольный JS | `tabs.executeScript` со строкой | мир страницы + `new Function`, при отказе CSP — мир пользовательских скриптов |
 | Скриншот всей страницы | одним вызовом | прокрутка и сшивка кусков (медленнее, до 25 экранов) |
 | Скриншот неактивной вкладки | как есть | вкладку приходится на миг активировать |
-| Контейнеры | `browser_containers` работает | аналога нет, вызов честно падает |
+| Контейнеры | `containers.list` работает | аналога нет, вызов честно падает |
 
 Что из этого важно на практике:
 
-- **`browser_eval` и CSP.** Код выполняется в мире страницы, а там действует её
+- **`eval` и CSP.** Код выполняется в мире страницы, а там действует её
   Content-Security-Policy. На сайтах со строгим `script-src` (например GitHub) `eval`
   запрещён. Обход — включить в карточке расширения **«Разрешить пользовательские
-  скрипты»**: тогда ffmcp выполнит код в отдельном мире, где CSP страницы не действует.
+  скрипты»**: тогда browserskill выполнит код в отдельном мире, где CSP страницы не действует.
   Без этого на таких сайтах придёт понятная ошибка с этой же подсказкой.
-  Инструменты `browser_click`, `browser_fill`, `browser_snapshot` и остальные структурные
+  Операции `page.click`, `page.fill`, `page.snapshot` и остальные структурные
   операции CSP не касается вообще — они внедряются готовыми функциями, а не строками.
 - **Буферы логов и сон воркера.** Service worker MV3 живёт от события до события. Расширение
   держит его будильником и переподключается автоматически, но если Chrome всё же усыпит
-  воркер, накопленные `browser_console` и `browser_network` обнулятся. Закрепление рабочего
+  воркер, накопленные `logs.console` и `logs.network` обнулятся. Закрепление рабочего
   окна переживает это — оно лежит в `storage.session`.
 - **Служебные страницы.** `chrome://*`, Chrome Web Store и PDF расширениям недоступны —
   там любая операция со страницей вернёт ошибку. В Firefox то же самое с `about:*`
   и `addons.mozilla.org`.
 
-## CLI
-
-Тот же мост доступен вручную, без агента:
+## Примеры CLI
 
 ```bash
-./bin/ffmcp.js doctor                      # диагностика обоих браузеров
-./bin/ffmcp.js browsers                    # кто сейчас на связи
-./bin/ffmcp.js status                      # версия браузера, число вкладок
-./bin/ffmcp.js tabs                        # список вкладок
-./bin/ffmcp.js open https://example.com
-./bin/ffmcp.js snapshot 12                 # элементы вкладки 12
-./bin/ffmcp.js eval 'return document.title'
-./bin/ffmcp.js api tabs.query '[{"pinned":true}]'
-./bin/ffmcp.js call page.text '{"tabId":12}'
+./bin/browserskill.js doctor                      # диагностика обоих браузеров
+./bin/browserskill.js browsers                    # кто сейчас на связи
+./bin/browserskill.js status                      # версия браузера, число вкладок
+./bin/browserskill.js tabs                        # список вкладок
+./bin/browserskill.js open https://example.com
+./bin/browserskill.js snapshot 12                 # элементы вкладки 12
+./bin/browserskill.js eval 'return document.title'
+./bin/browserskill.js api tabs.query '[{"pinned":true}]'
+./bin/browserskill.js call page.text '{"tabId":12}'
 ```
 
 Браузер выбирается флагом `--browser=chrome` (или `-b chrome`), переменной
-`FFMCP_BROWSER`, иначе автоматически:
+`BROWSERSKILL_BROWSER`, иначе автоматически:
 
 ```bash
-./bin/ffmcp.js -b chrome tabs
-FFMCP_BROWSER=chrome ./bin/ffmcp.js status
+./bin/browserskill.js -b chrome tabs
+BROWSERSKILL_BROWSER=chrome ./bin/browserskill.js status
 ```
 
 ## Тесты
@@ -240,9 +227,9 @@ FFMCP_BROWSER=chrome ./bin/ffmcp.js status
 ./tests/run.sh
 ```
 
-Живой браузер не нужен — браузеры и расширения заменяются заглушками. Проверяются: сборка
-JSON-RPC и все схемы инструментов, проход вызова MCP → сокет → хост → расширение, выбор
-браузера и маршрутизация между двумя хостами, сборка чанкованных ответов, очистка сокета,
+Живой браузер не нужен — браузеры и расширения заменяются заглушками. Проверяются: проход
+вызова CLI → сокет → хост → расширение, выбор браузера флагом, переменной и автоматически
+с маршрутизацией между двумя хостами, сборка чанкованных ответов, очистка сокета,
 отсутствие синхронных циклов при загрузке фона (отдельно для фоновой страницы Firefox
 и для service worker Chrome) и, отдельно, устойчивость обоих перехватчиков консоли
 к зацикливанию.
@@ -263,54 +250,54 @@ JSON-RPC и все схемы инструментов, проход вызов�
 
 ### Подтверждение подключения
 
-Каждое новое подключение MCP-клиента к сокету пользователь подтверждает вручную. Пока
+Каждое новое подключение клиента к сокету пользователь подтверждает вручную. Пока
 не подтверждено — все вызовы (кроме health-check `ping` и `__status`) висят, а хост
 показывает нотификацию браузера. Клик по ней открывает popup расширения, где для запроса
 предлагается выбор области:
 
-<img src="docs/approval-popup.png" alt="popup ffmcp с запросом доступа" width="300" />
+<img src="docs/approval-popup.png" alt="popup browserskill с запросом доступа" width="300" />
 
 
 - **это подключение** — доступ только для текущего живого соединения; переподключился клиент — спросят снова;
 - **на эту сессию** — до перезапуска браузера (запоминается токен клиента в памяти хоста);
-- **навсегда** — токен клиента сохраняется в `~/.ffmcp/allowed-<браузер>.json` (0600) и переживает перезапуск.
+- **навсегда** — токен клиента сохраняется в `~/.browserskill/allowed-<браузер>.json` (0600) и переживает перезапуск.
 
 Одобрение действует в пределах одного браузера: разрешив агенту Firefox, ты не разрешил
 ему заодно и Chrome — там он спросит отдельно.
 
-Клиент идентифицируется стабильным токеном из `~/.ffmcp/client-token` (0600); MCP-сервер
-и CLI используют один и тот же токен, поэтому одобрение «навсегда» покрывает оба. Если
-пользователь не реагирует за `FFMCP_APPROVAL_TIMEOUT_MS` (по умолчанию 120000 мс), доступ
-отклоняется (fail-closed). Полностью выключить гейт — `FFMCP_APPROVAL=0` (для headless/CI).
+Клиент идентифицируется стабильным токеном из `~/.browserskill/client-token` (0600) — он
+общий для всех вызовов CLI с этой машины, поэтому одобрение «навсегда» даётся один раз. Если
+пользователь не реагирует за `BROWSERSKILL_APPROVAL_TIMEOUT_MS` (по умолчанию 120000 мс), доступ
+отклоняется (fail-closed). Полностью выключить гейт — `BROWSERSKILL_APPROVAL=0` (для headless/CI).
 
 Ограничение платформы: кнопок в нотификациях Firefox нет, поэтому подтверждать нужно
 именно в popup (нотификация только сигналит и открывает его).
 
-- Сокеты лежат в `~/.ffmcp` с правами `0600` — доступны только твоему пользователю,
+- Сокеты лежат в `~/.browserskill` с правами `0600` — доступны только твоему пользователю,
   никакой сети, ни локальной, ни внешней.
-- Буферы `browser_console` и `browser_network` пишутся постоянно, со всех вкладок, и в них
+- Буферы `logs.console` и `logs.network` пишутся постоянно, со всех вкладок, и в них
   оседает то, что страницы логируют сами. На практике это бывают почта, идентификаторы
   аккаунта, тариф и прочие персональные данные — например, `claude.ai` печатает в консоль
   полный набор трейтов аналитики. Любой подключённый агент прочитает это одним вызовом.
-  Чистить буфер: `browser_console {"clear": true}`.
+  Чистить буфер: `browserskill call logs.console '{"clear":true}'`.
 - Манифест хоста ограничивает подключение конкретным расширением: `allowed_extensions`
-  с `ffmcp@local` у Firefox, `allowed_origins` с `chrome-extension://mifolcjccjkcdfdoebmkgklimogoemng/`
+  с `browserskill@local` у Firefox, `allowed_origins` с `chrome-extension://mifolcjccjkcdfdoebmkgklimogoemng/`
   у Chrome.
 - Чтобы временно всё отключить — выгрузи расширение (`about:debugging` /
   `chrome://extensions`) или закрой браузер: сокет исчезает вместе с хостом.
-- Логи хостов: `~/.ffmcp/firefox.log` и `~/.ffmcp/chrome.log`.
+- Логи хостов: `~/.browserskill/firefox.log` и `~/.browserskill/chrome.log`.
 
 ## Диагностика
 
 | Симптом | Причина |
 |---|---|
-| `сокет не найден` | браузер не запущен либо расширение не загружено; `ffmcp browsers` покажет, кто на связи |
-| `расширение ffmcp не подключено к хосту` | хост поднялся, но расширение отвалилось — жми «Переподключить» в попапе |
-| Значок расширения показывает `off` | native-хост не запускается; смотри `~/.ffmcp/<браузер>.log` и проверь путь к `node` в лаунчере |
+| `сокет не найден` | браузер не запущен либо расширение не загружено; `browserskill browsers` покажет, кто на связи |
+| `расширение browserskill не подключено к хосту` | хост поднялся, но расширение отвалилось — жми «Переподключить» в попапе |
+| Значок расширения показывает `off` | native-хост не запускается; смотри `~/.browserskill/<браузер>.log` и проверь путь к `node` в лаунчере |
 | В Chrome ID расширения не `mifolcjccjkcdfdoebmkgklimogoemng` | загружен каталог без поля `key` в манифесте — переустанови из `extension-chrome` |
 | `страница запрещает выполнение кода своей CSP` | включи «Разрешить пользовательские скрипты» в карточке расширения Chrome |
 | `скрипт не вернул результат` | это внутренняя страница (`about:`, `chrome://`, магазин расширений) — там расширения работать не могут |
-| Вызовы висят, значок показывает `!` | ждёт твоего подтверждения — открой popup ffmcp и выбери область доступа |
+| Вызовы висят, значок показывает `!` | ждёт твоего подтверждения — открой popup browserskill и выбери область доступа |
 | `доступ к … не подтверждён (таймаут)` | никто не нажал подтверждение за отведённое время; повтори вызов и подтверди в popup |
 | Агент переспрашивает доступ каждый раз | одобрено «на подключение»; выбери «на сессию» или «навсегда» |
 | В Chrome пропали логи консоли | service worker уснул и буферы обнулились — логи копятся заново с этого момента |
