@@ -26,12 +26,26 @@
 
 ## Установка
 
+Одной командой (macOS):
+
 ```bash
+curl -fsSL https://raw.githubusercontent.com/ruslankolmakov/browserskill/main/get.sh | bash
+```
+
+`get.sh` клонирует репозиторий в `~/.browserskill/app` (другой путь — переменная
+`BROWSERSKILL_SRC`), ставит `node` через Homebrew, если его нет, запускает `install.sh`,
+открывает страницы расширений в найденных браузерах и кладёт путь к расширению в буфер
+обмена — остаётся нажать «Загрузить распакованное». Повторный запуск обновляет установку.
+
+Из клона вручную:
+
+```bash
+git clone git@github.com:ruslankolmakov/browserskill.git ~/Projects/browserskill
 cd ~/Projects/browserskill
 ./install.sh
 ```
 
-Скрипт кладёт манифесты native-хоста в каталоги Firefox и всех найденных браузеров на
+`install.sh` кладёт манифесты native-хоста в каталоги Firefox и всех найденных браузеров на
 Chromium, создаёт лаунчеры с абсолютным путём к `node` (браузер из Finder не видит
 `/opt/homebrew/bin`) и ставит скилл в `~/.claude/skills/browserskill` (другой каталог —
 переменная `CLAUDE_SKILLS_DIR`).
