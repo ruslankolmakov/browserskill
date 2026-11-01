@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Регистрирует native messaging хосты browserskill для Firefox и Chrome на macOS
-# и ставит скилл browserskill в ~/.claude/skills.
+# и ставит скилл browserskill для Claude Code и Codex.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -33,11 +33,14 @@ EOF
   echo "$file"
 }
 
-# --- Скилл для Claude Code: SKILL.md из репозитория с подставленным путём ---
-SKILL_DIR="${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}/browserskill"
-mkdir -p "$SKILL_DIR"
-sed "s|__ROOT__|$ROOT|g" "$ROOT/skill/SKILL.md" > "$SKILL_DIR/SKILL.md"
-echo "✅ скилл: $SKILL_DIR/SKILL.md"
+# --- Общий скилл для Claude Code и Codex с подставленным путём ---
+CLAUDE_SKILL_DIR="${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}/browserskill"
+CODEX_SKILL_DIR="${CODEX_SKILLS_DIR:-$HOME/.agents/skills}/browserskill"
+for dir in "$CLAUDE_SKILL_DIR" "$CODEX_SKILL_DIR"; do
+  mkdir -p "$dir"
+  sed "s|__ROOT__|$ROOT|g" "$ROOT/skill/SKILL.md" > "$dir/SKILL.md"
+  echo "✅ скилл: $dir/SKILL.md"
+done
 
 FF_LAUNCHER="$(make_launcher firefox)"
 CHROME_LAUNCHER="$(make_launcher chrome)"
@@ -114,5 +117,6 @@ echo "       — без этого eval не работает на сайтах 
 echo
 echo "  Проверка: $ROOT/bin/browserskill.js doctor"
 echo
-echo "Скилл для Claude Code: $SKILL_DIR/SKILL.md"
+echo "Скилл для Claude Code: $CLAUDE_SKILL_DIR/SKILL.md"
+echo "Скилл для Codex: $CODEX_SKILL_DIR/SKILL.md"
 echo "Агент вызывает CLI напрямую: $ROOT/bin/browserskill.js <команда>"

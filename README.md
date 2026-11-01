@@ -1,6 +1,6 @@
 # browserskill
 
-Расширения для Firefox и Chrome + CLI + скилл для Claude Code, дающие агентам полный доступ
+Расширения для Firefox и Chrome + CLI + скилл для Claude Code и Codex, дающие агентам полный доступ
 к твоим настоящим браузерам. Никакого MCP-сервера: агент вызывает CLI как обычную команду,
 а как ей пользоваться — описано в скилле. Транспорт целиком локальный: **stdio и Unix-сокет, ни одного HTTP-запроса
 и ни одного открытого порта**.
@@ -47,8 +47,10 @@ cd ~/Projects/browserskill
 
 `install.sh` кладёт манифесты native-хоста в каталоги Firefox и всех найденных браузеров на
 Chromium, создаёт лаунчеры с абсолютным путём к `node` (браузер из Finder не видит
-`/opt/homebrew/bin`) и ставит скилл в `~/.claude/skills/browserskill` (другой каталог —
-переменная `CLAUDE_SKILLS_DIR`).
+`/opt/homebrew/bin`) и ставит скилл для обоих агентов:
+
+- Claude Code: `~/.claude/skills/browserskill` (другой каталог — `CLAUDE_SKILLS_DIR`).
+- Codex: `~/.agents/skills/browserskill` (другой каталог — `CODEX_SKILLS_DIR`).
 
 Затем ставим расширения — нужно хотя бы одно.
 
@@ -84,10 +86,21 @@ Chromium, создаёт лаунчеры с абсолютным путём к 
 
 ## Подключение к агентам
 
-Отдельной настройки нет: `install.sh` кладёт `SKILL.md` в `~/.claude/skills/browserskill`,
-и Claude Code подхватывает скилл сам. Скилл описывает, как звать CLI, какие операции есть
-и на какие грабли не наступать. Источник — `skill/SKILL.md` в репозитории, в него при
-установке подставляется путь к репозиторию.
+Отдельной настройки нет: `install.sh` ставит общий `skill/SKILL.md` для Claude Code
+и Codex, подставляя абсолютный путь к репозиторию. Скилл описывает, как звать CLI,
+какие операции есть и на какие грабли не наступать.
+
+В Codex CLI или IDE скилл можно вызвать явно: `$browserskill`, либо выбрать через
+`/skills`. Если новый скилл не появился, перезапусти Codex.
+Каталог `~/.agents/skills` соответствует
+[документации Codex](https://learn.chatgpt.com/docs/build-skills).
+
+Для уже установленного browserskill достаточно повторно запустить `./install.sh`.
+Пример с другим каталогом скиллов Codex:
+
+```bash
+CODEX_SKILLS_DIR="$HOME/.codex/skills" ./install.sh
+```
 
 Любому другому агенту достаточно уметь запускать команду:
 
@@ -109,7 +122,7 @@ BROWSERSKILL_BROWSER=chrome browserskill status
 
 ## Команды и операции
 
-Короткие подкоманды (`browserskill --help`): `doctor`, `browsers`, `status`, `windows`,
+Короткие подкоманды (`browserskill` без аргументов): `doctor`, `browsers`, `status`, `windows`,
 `use-window`, `new-window`, `tabs`, `open`, `snapshot`, `read`, `eval`, `api`, `call`.
 
 Всё остальное — через `call <op> '<json>'`, это ~40 операций моста:
