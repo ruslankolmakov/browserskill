@@ -50,7 +50,7 @@ Chromium, создаёт лаунчеры с абсолютным путём к 
 `/opt/homebrew/bin`) и ставит скилл для обоих агентов:
 
 - Claude Code: `~/.claude/skills/browserskill` (другой каталог — `CLAUDE_SKILLS_DIR`).
-- Codex: `~/.agents/skills/browserskill` (другой каталог — `CODEX_SKILLS_DIR`).
+- Codex: `~/.codex/skills/browserskill` (учитывается `CODEX_HOME`; другой каталог — `CODEX_SKILLS_DIR`).
 
 Затем ставим расширения — нужно хотя бы одно.
 
@@ -90,17 +90,9 @@ Chromium, создаёт лаунчеры с абсолютным путём к 
 и Codex, подставляя абсолютный путь к репозиторию. Скилл описывает, как звать CLI,
 какие операции есть и на какие грабли не наступать.
 
-В Codex CLI или IDE скилл можно вызвать явно: `$browserskill`, либо выбрать через
-`/skills`. Если новый скилл не появился, перезапусти Codex.
-Каталог `~/.agents/skills` соответствует
-[документации Codex](https://learn.chatgpt.com/docs/build-skills).
-
-Для уже установленного browserskill достаточно повторно запустить `./install.sh`.
-Пример с другим каталогом скиллов Codex:
-
-```bash
-CODEX_SKILLS_DIR="$HOME/.codex/skills" ./install.sh
-```
+В Codex скилл можно вызвать явно: `$browserskill`, либо выбрать через `/skills`.
+Если новый скилл не появился, перезапусти Codex. Для уже установленного browserskill
+достаточно повторно запустить `./install.sh`.
 
 Любому другому агенту достаточно уметь запускать команду:
 

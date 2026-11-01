@@ -35,7 +35,7 @@ EOF
 
 # --- Общий скилл для Claude Code и Codex с подставленным путём ---
 CLAUDE_SKILL_DIR="${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}/browserskill"
-CODEX_SKILL_DIR="${CODEX_SKILLS_DIR:-$HOME/.agents/skills}/browserskill"
+CODEX_SKILL_DIR="${CODEX_SKILLS_DIR:-${CODEX_HOME:-$HOME/.codex}/skills}/browserskill"
 for dir in "$CLAUDE_SKILL_DIR" "$CODEX_SKILL_DIR"; do
   mkdir -p "$dir"
   sed "s|__ROOT__|$ROOT|g" "$ROOT/skill/SKILL.md" > "$dir/SKILL.md"
